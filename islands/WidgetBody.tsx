@@ -1,0 +1,29 @@
+import { useEffect, useState } from "react";
+
+interface Summary {
+  configured: boolean;
+  open: number;
+}
+
+/** Billing widget body — open-invoice count. Same-origin fetch with credentials. */
+export default function WidgetBody() {
+  const [data, setData] = useState<Summary | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    fetch("/billing/summary", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: Summary) => setData(d))
+      .catch(() => setError(true));
+  }, []);
+
+  if (error) return <p className="widget__metric">—</p>;
+  if (!data) return <p className="widget__metric">…</p>;
+
+  return (
+    <div className="widget__body">
+      <p className="widget__metric">{data.open}</p>
+      <p className="widget__label">{data.configured ? "offene Rechnungen" : "Stripe nicht konfiguriert"}</p>
+    </div>
+  );
+}

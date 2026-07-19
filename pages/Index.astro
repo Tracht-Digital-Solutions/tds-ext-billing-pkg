@@ -1,0 +1,11 @@
+---
+// Billing/invoices page — the admin invoice list + create + send UI. Injected
+// into the host build via the manifest's route slot.
+import BillingAdmin from "../islands/BillingAdmin.tsx";
+---
+
+<section class="page page--billing">
+  <h1>Rechnungen</h1>
+  <p class="page__intro">Rechnungen erstellen, an Stripe senden und den Zahlungsstatus verfolgen.</p>
+  <BillingAdmin client:load />
+</section>
