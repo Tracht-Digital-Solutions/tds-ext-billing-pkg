@@ -4,6 +4,14 @@ The **Stripe billing/invoices** panel extension. Read `tds-panel-contract`'s
 AGENTS.md first; `tds-ext-lexware` / `tds-ext-customers` are the worked references
 for the container-first Module + settings-store + curl-client pattern.
 
+> Status (2026-07-20): **built locally, NOT pushed and NOT published.** The GitHub repo
+> does not exist yet. Go-live: create the public repo + `PACKAGE_TOKEN`, push, Release →
+> publish `@0.1.x`, wire into the admin product (and the customer product for the portal
+> pay link), then point a Stripe webhook at `/billing/webhook` and set the Stripe keys via
+> `/einstellungen`. `Service\WebhookVerifier` (HMAC-SHA256 + replay guard) is fully
+> unit-tested since live Stripe calls can't be. See the root `MIGRATION-STATUS.md`
+> (issue #4).
+
 ## What it does
 
 Admins (`billing:read`/`billing:write`) draft invoices with line items for a
