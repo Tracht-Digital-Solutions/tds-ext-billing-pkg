@@ -48,6 +48,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Tracht-Digital-Solutions/tds-ext-billing.git"
+    "url": "git+https://github.com/Tracht-Digital-Solutions/tds-ext-billing-pkg.git"
   }
 }

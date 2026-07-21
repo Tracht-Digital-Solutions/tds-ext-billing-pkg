@@ -1,7 +1,7 @@
-# AGENTS.md — tds-ext-billing
+# AGENTS.md — tds-ext-billing-pkg
 
-The **Stripe billing/invoices** panel extension. Read `tds-panel-contract`'s
-AGENTS.md first; `tds-ext-lexware` / `tds-ext-customers` are the worked references
+The **Stripe billing/invoices** panel extension. Read `tds-panel-contract-pkg`'s
+AGENTS.md first; `tds-ext-lexware-pkg` / `tds-ext-customers-pkg` are the worked references
 for the container-first Module + settings-store + curl-client pattern.
 
 > Status (2026-07-20): **published @0.1.1** (public repo + GitHub Packages `@latest`, tag
@@ -21,7 +21,7 @@ see their own invoices + the hosted pay link.
 
 - Tables `billing_invoice` + `billing_invoice_item` (module owns them). Money in
   integer cents; total summed from items at write.
-- `customer_id` references the **tds-ext-customers** `customer` directory with NO
+- `customer_id` references the **tds-ext-customers-pkg** `customer` directory with NO
   cross-domain FK (soft, like `ticket.customer_id`); queried defensively at send
   time (try/catch — the customers extension may be absent). No hard `dependsOn`.
 - Routes: widget `/billing/summary`; admin `GET/POST /admin/invoices`,

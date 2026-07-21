@@ -1,7 +1,7 @@
-# tds-ext-billing
+# tds-ext-billing-pkg
 
 **Stripe billing/invoices** for the TDS panel. A build-time-composed extension for
-the panel platform (`tds-panel-contract` + `tds-core-panel-*`).
+the panel platform (`tds-panel-contract-pkg` + `tds-core-panel-*`).
 
 ## Features
 
@@ -25,7 +25,7 @@ key ⇒ send/webhook routes 503.
 ## Develop
 
 ```bash
-npm install --no-package-lock   # tds-panel-contract from GitHub Packages (NPM_TOKEN)
+npm install --no-package-lock   # tds-panel-contract-pkg from GitHub Packages (NPM_TOKEN)
 npm run type-check && npm run build
 composer install                # contract from its public VCS repo
 composer test                   # phpunit: WebhookVerifier (real HMAC) + Module RBAC (DB-free)
