@@ -1,6 +1,6 @@
 # AGENTS.md — tds-ext-billing-pkg
 
-The **Stripe billing/invoices** panel extension. Read `tds-panel-contract-pkg`'s
+The **Stripe billing/invoices** frontend extension. Read `tds-frontend-contract-pkg`'s
 AGENTS.md first; `tds-ext-lexware-pkg` / `tds-ext-customers-pkg` are the worked references
 for the container-first Module + settings-store + curl-client pattern.
 
@@ -53,6 +53,6 @@ composer install && composer test    # phpunit: WebhookVerifier (real HMAC) + Mo
 npm install --no-package-lock && npm run type-check && npm run build
 ```
 
-Register `new BillingModule()` in `tds-core-panel-api`'s `Modules::enabled()`; add
+Register `new BillingModule()` in `tds-core-frontend-api`'s `Modules::enabled()`; add
 the manifest to the admin (and, for the portal invoice view, customer) target's
-`panelHost({ extensions })`.
+`frontendHost({ extensions })`.

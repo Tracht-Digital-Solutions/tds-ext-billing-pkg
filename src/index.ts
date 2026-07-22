@@ -1,4 +1,4 @@
-import { defineExtension } from "@tracht-digital-solutions/tds-panel-contract";
+import { defineExtension } from "@tracht-digital-solutions/tds-frontend-contract";
 
 /**
  * Stripe billing/invoices manifest. Admin drafts + sends invoices; portal

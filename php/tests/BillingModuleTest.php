@@ -9,7 +9,7 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tds\Ext\Billing\BillingModule;
-use Tds\Panel\Contract\UserContext;
+use Tds\Frontend\Contract\UserContext;
 
 /** A configurable UserContext double. */
 final class FakeUser implements UserContext
