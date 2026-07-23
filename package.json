@@ -1,6 +1,6 @@
 {
   "name": "@tracht-digital-solutions/tds-ext-billing",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Stripe billing/invoices for the TDS panel: draft invoices, send to Stripe, signed webhook → mark paid, admin + portal views. Ships the frontend manifest, PHP Module, and the dual CI/publish pipeline.",
   "license": "UNLICENSED",
   "private": false,
