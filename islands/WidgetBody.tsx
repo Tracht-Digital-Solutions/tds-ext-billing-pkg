@@ -17,12 +17,12 @@ export default function WidgetBody() {
       .catch(() => setError(true));
   }, []);
 
-  if (error) return <p className="widget__metric">—</p>;
-  if (!data) return <p className="widget__metric">…</p>;
+  if (error) return <p className="tds-widget__metric">—</p>;
+  if (!data) return <p className="tds-widget__metric">…</p>;
 
   return (
     <div className="widget__body">
-      <p className="widget__metric">{data.open}</p>
+      <p className="tds-widget__metric">{data.open}</p>
       <p className="widget__label">{data.configured ? "offene Rechnungen" : "Stripe nicht konfiguriert"}</p>
     </div>
   );

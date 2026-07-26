@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Spinner } from "@tracht-digital-solutions/tds-shared/components";
 
 interface Masked {
   key: string;
@@ -74,7 +75,7 @@ export default function BillingSettings() {
 
   const hint = (s: Masked | null) => (s?.configured ? `konfiguriert (…${s.last4 ?? "????"})` : "nicht konfiguriert");
 
-  if (!loaded) return <p>Wird geladen …</p>;
+  if (!loaded) return <p role="status"><Spinner /></p>;
 
   return (
     <div className="billing-settings space-y-4">
@@ -96,7 +97,7 @@ export default function BillingSettings() {
           <input type="number" min="0" value={days} onChange={(e) => setDays(e.target.value)} placeholder="14" />
         </label>
       </div>
-      {status ? <p className="status-pill status-pill--info">{status}</p> : null}
+      {status ? <p className="tds-alert" role="status">{status}</p> : null}
       <button type="button" onClick={save} disabled={busy}>Speichern</button>
     </div>
   );

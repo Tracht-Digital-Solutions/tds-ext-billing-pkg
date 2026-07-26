@@ -4,8 +4,10 @@
 import BillingAdmin from "../islands/BillingAdmin.tsx";
 ---
 
-<section class="page page--billing">
-  <h1>Rechnungen</h1>
-  <p class="page__intro">Rechnungen erstellen, an Stripe senden und den Zahlungsstatus verfolgen.</p>
+<section class="tds-page">
+  <div class="tds-page__head">
+    <h1 class="tds-page__title">Rechnungen</h1>
+  </div>
+  <p class="tds-page__lede">Rechnungen erstellen, an Stripe senden und den Zahlungsstatus verfolgen.</p>
   <BillingAdmin client:load />
 </section>
