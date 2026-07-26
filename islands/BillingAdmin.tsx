@@ -119,13 +119,13 @@ export default function BillingAdmin() {
               <input type="number" min="0" step="0.01" placeholder="Einzelpreis €" value={it.amount} onChange={(e) => setItem(i, { amount: e.target.value })} />
             </div>
           ))}
-          <button type="button" className="btn-secondary" onClick={() => setItems((p) => [...p, { description: "", quantity: "1", amount: "" }])}>
+          <button type="button" className="btn btn-ghost" onClick={() => setItems((p) => [...p, { description: "", quantity: "1", amount: "" }])}>
             + Position
           </button>
 
           <div className="flex gap-2">
             <button type="button" onClick={create}>Entwurf erstellen</button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Abbrechen</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Abbrechen</button>
           </div>
         </div>
       ) : (
@@ -161,7 +161,7 @@ export default function BillingAdmin() {
                 {inv.status === "draft" ? (
                   <>
                     <button type="button" onClick={() => void send(inv.id)}>Senden</button>
-                    <button type="button" className="btn-secondary" onClick={() => void remove(inv.id)}>Löschen</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => void remove(inv.id)}>Löschen</button>
                   </>
                 ) : null}
               </td>

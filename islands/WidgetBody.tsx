@@ -21,9 +21,9 @@ export default function WidgetBody() {
   if (!data) return <p className="tds-widget__metric">…</p>;
 
   return (
-    <div className="widget__body">
+    <div className="tds-stack">
       <p className="tds-widget__metric">{data.open}</p>
-      <p className="widget__label">{data.configured ? "offene Rechnungen" : "Stripe nicht konfiguriert"}</p>
+      <p className="marginalia">{data.configured ? "offene Rechnungen" : "Stripe nicht konfiguriert"}</p>
     </div>
   );
 }
