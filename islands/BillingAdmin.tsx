@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Spinner } from "@tracht-digital-solutions/tds-shared/components";
+import { ConfirmDialog, Spinner } from "@tracht-digital-solutions/tds-shared/components";
 
 const api = (path: string, init?: RequestInit) => fetch(path, { credentials: "include", ...init });
 
@@ -29,6 +29,8 @@ export default function BillingAdmin() {
   const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Invoice | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -90,9 +92,19 @@ export default function BillingAdmin() {
     void load();
   };
 
-  const remove = async (id: number) => {
-    const res = await api(`/admin/invoices/${id}`, { method: "DELETE" });
-    if (res.ok) void load();
+  // An invoice is a financial record — deleting one was a single unguarded
+  // click. Gated by <ConfirmDialog> like every other cascading delete.
+  const confirmRemove = async () => {
+    const inv = pendingDelete;
+    if (!inv) return;
+    setDeleting(true);
+    try {
+      const res = await api(`/admin/invoices/${inv.id}`, { method: "DELETE" });
+      setPendingDelete(null);
+      if (res.ok) void load();
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (!loaded) return <p role="status"><Spinner /></p>;
@@ -161,7 +173,7 @@ export default function BillingAdmin() {
                 {inv.status === "draft" ? (
                   <>
                     <button type="button" onClick={() => void send(inv.id)}>Senden</button>
-                    <button type="button" className="btn btn-ghost" onClick={() => void remove(inv.id)}>Löschen</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => setPendingDelete(inv)}>Löschen</button>
                   </>
                 ) : null}
               </td>
@@ -174,6 +186,15 @@ export default function BillingAdmin() {
           ) : null}
         </tbody>
       </table>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Rechnung #${pendingDelete?.id ?? ""} löschen?`}
+        message="Der Rechnungsentwurf und alle Positionen werden dauerhaft entfernt."
+        busy={deleting}
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }
