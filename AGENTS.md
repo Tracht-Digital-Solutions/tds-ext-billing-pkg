@@ -46,11 +46,59 @@ see their own invoices + the hosted pay link.
 - Migration class prefix `Billing*`; migration **version** also unique across
   extensions (shared `phinxlog`). MySQL-8-safe (`signed=>false`).
 
+## Tests (frontend)
+
+```bash
+npm run test:run    # vitest, 125 tests (jsdom per-file via a @vitest-environment docblock)
+```
+
+`islands/BillingAdmin.test.tsx` — this island hands invoices to **Stripe**,
+where they become real money owed by a real customer, so the assertions
+concentrate on what cannot be walked back:
+
+- **Senden and Löschen exist only on a `draft`.** That conditional is the only
+  guard against re-sending an open invoice (double-charging) or deleting one
+  Stripe already knows about (desyncing the two ledgers). Asserted for `open`,
+  `paid` and `void`.
+- **Amounts are typed in EUROS and sent in CENTS**, pinned at the edges —
+  including the `Math.max(1, …)` quantity clamp, because a negative quantity on
+  a Stripe line item turns an invoice into a refund.
+- **A line with no amount never reaches Stripe.** The empty starter row is
+  always in the form; submitting it would put a phantom 0 € position on every
+  invoice.
+- **`customer_id` is NULL, not 0**, when unassigned — `Number("")` is 0, which
+  would attach the invoice to customer 0.
+- The send path **re-reads the list either way**: the invoice may have reached
+  Stripe even when the response failed, and only the reload shows the truth.
+
+`islands/BillingSettings.test.tsx` — the two Stripe secrets are **not
+interchangeable**: the API key authenticates our calls *to* Stripe, the webhook
+secret verifies calls *from* it. A shared masked state would report the webhook
+secret as configured purely because the API key is, and payment confirmation
+would look healthy while it silently is not. Both are asserted to stay apart,
+both stored as secrets, and both honouring the store's contract (masked on read,
+**blank on save = keep existing**).
+
+`islands/WidgetBody.test.tsx` — `—` on a failure, never `0`: the latter claims
+every invoice is settled.
+
+`src/index.test.ts` + `tests/packaging.test.ts` — the manifest as a product
+build sees it, and that every specifier resolves, is exported, and ships.
+
+Error-path tests deliberately answer with a POPULATED body and a non-OK status.
+Against an EMPTY error body the `res.ok` check is unobservable.
+
+> The quantity test that matters uses **`-3` via `fireEvent`**: `Number("0") || 1`
+> already yields 1, so a zero never reaches the clamp, and a `min="1"` number
+> input will not accept a typed minus.
+
+Verified by mutation: 64 deliberate breakages introduced, 64 caught.
+
 ## Commands
 
 ```bash
 composer install && composer test    # phpunit: WebhookVerifier (real HMAC) + Module RBAC (DB-free)
-npm install --no-package-lock && npm run type-check && npm run build
+npm install --no-package-lock && npm run type-check && npm run test:run && npm run build
 ```
 
 Register `new BillingModule()` in `tds-core-frontend-api`'s `Modules::enabled()`; add

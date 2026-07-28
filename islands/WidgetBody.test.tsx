@@ -1,0 +1,82 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import WidgetBody from "./WidgetBody";
+
+/**
+ * The billing widget: how many invoices are still unpaid.
+ *
+ * The failed/loaded distinction is the point: `0` on a failed request says
+ * every invoice is settled — a different and materially wrong claim from `—`.
+ */
+
+let reply: { status: number; body: unknown } | "reject" = { status: 200, body: { configured: true, open: 0 } };
+
+beforeEach(() => {
+  reply = { status: 200, body: { configured: true, open: 0 } };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      if (reply === "reject") throw new TypeError("offline");
+      return {
+        ok: reply.status < 300,
+        status: reply.status,
+        json: async () => (reply === "reject" ? {} : reply.body),
+      } as Response;
+    }),
+  );
+});
+
+afterEach(() => cleanup());
+
+describe("the widget", () => {
+  it("fetches its summary endpoint with credentials", () => {
+    render(<WidgetBody />);
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    expect(fetchMock.mock.calls[0]![0]).toBe("/billing/summary");
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ credentials: "include" });
+  });
+
+  it("shows a placeholder before the request resolves", () => {
+    render(<WidgetBody />);
+    expect(screen.getByText("…")).toBeTruthy();
+  });
+
+  it("renders the number of unpaid invoices", async () => {
+    reply = { status: 200, body: { configured: true, open: 4 } };
+    render(<WidgetBody />);
+    expect(await screen.findByText("4")).toBeTruthy();
+    expect(screen.getByText("offene Rechnungen")).toBeTruthy();
+  });
+
+  it("renders a real zero when everything is settled", async () => {
+    render(<WidgetBody />);
+    expect(await screen.findByText("0")).toBeTruthy();
+  });
+
+  it("says Stripe is unconfigured instead of implying invoicing works", async () => {
+    reply = { status: 200, body: { configured: false, open: 0 } };
+    render(<WidgetBody />);
+    expect(await screen.findByText("Stripe nicht konfiguriert")).toBeTruthy();
+    expect(screen.queryByText("offene Rechnungen")).toBeNull();
+  });
+
+  it("shows a dash on an error rather than claiming nothing is owed", async () => {
+    reply = { status: 500, body: {} };
+    render(<WidgetBody />);
+    expect(await screen.findByText("—")).toBeTruthy();
+  });
+
+  it("shows a dash when the request rejects", async () => {
+    reply = "reject";
+    render(<WidgetBody />);
+    expect(await screen.findByText("—")).toBeTruthy();
+  });
+
+  it("does not render a count carried by a NON-OK response", async () => {
+    reply = { status: 403, body: { configured: true, open: 99 } };
+    render(<WidgetBody />);
+    expect(await screen.findByText("—")).toBeTruthy();
+    expect(screen.queryByText("99")).toBeNull();
+  });
+});
