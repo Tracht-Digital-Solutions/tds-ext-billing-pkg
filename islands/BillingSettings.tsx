@@ -81,24 +81,24 @@ export default function BillingSettings() {
     <div className="billing-settings space-y-4">
       <label className="block">
         <span className="text-sm">Stripe Secret Key <em className="opacity-60">({hint(keyState)})</em></span>
-        <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="sk_… (leer = behalten)" autoComplete="off" />
+        <input className="field-boxed" type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="sk_… (leer = behalten)" autoComplete="off" />
       </label>
       <label className="block">
         <span className="text-sm">Webhook Secret <em className="opacity-60">({hint(whState)})</em></span>
-        <input type="password" value={whInput} onChange={(e) => setWhInput(e.target.value)} placeholder="whsec_… (leer = behalten)" autoComplete="off" />
+        <input className="field-boxed" type="password" value={whInput} onChange={(e) => setWhInput(e.target.value)} placeholder="whsec_… (leer = behalten)" autoComplete="off" />
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm">Standard-Währung</span>
-          <input type="text" maxLength={3} value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="EUR" />
+          <input className="field-boxed" type="text" maxLength={3} value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="EUR" />
         </label>
         <label className="block">
           <span className="text-sm">Zahlungsziel (Tage)</span>
-          <input type="number" min="0" value={days} onChange={(e) => setDays(e.target.value)} placeholder="14" />
+          <input className="field-boxed" type="number" min="0" value={days} onChange={(e) => setDays(e.target.value)} placeholder="14" />
         </label>
       </div>
       {status ? <p className="tds-alert" role="status">{status}</p> : null}
-      <button type="button" onClick={save} disabled={busy}>Speichern</button>
+      <button type="button" className="btn btn-primary" onClick={save} disabled={busy} aria-busy={busy}>Speichern</button>
     </div>
   );
 }

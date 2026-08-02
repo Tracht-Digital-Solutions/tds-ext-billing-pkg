@@ -110,41 +110,41 @@ export default function BillingAdmin() {
   if (!loaded) return <p><Spinner /></p>;
 
   return (
-    <div className="billing-admin">
+    <div className="tds-stack">
       {status ? <p className="tds-alert" role="status">{status}</p> : null}
 
       {showForm ? (
-        <div className="lx-form billing-form">
+        <div className="tds-card tds-stack">
           <h4>Neue Rechnung</h4>
-          <input type="number" placeholder="Kunden-ID (optional)" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
-          <input type="text" placeholder="Beschreibung (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <label className="block">
-            <span className="text-sm">Fällig am</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <input className="field-boxed" type="number" placeholder="Kunden-ID (optional)" aria-label="Kunden-ID" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
+          <input className="field-boxed" type="text" placeholder="Beschreibung (optional)" aria-label="Beschreibung" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <label className="tds-field-row">
+            <span>Fällig am</span>
+            <input className="field-boxed" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </label>
 
           <h5>Positionen</h5>
           {items.map((it, i) => (
-            <div key={i} className="flex gap-2">
-              <input type="text" placeholder="Beschreibung" value={it.description} onChange={(e) => setItem(i, { description: e.target.value })} />
-              <input type="number" min="1" placeholder="Menge" value={it.quantity} onChange={(e) => setItem(i, { quantity: e.target.value })} />
-              <input type="number" min="0" step="0.01" placeholder="Einzelpreis €" value={it.amount} onChange={(e) => setItem(i, { amount: e.target.value })} />
+            <div key={i} className="tds-toolbar">
+              <input className="field-boxed" type="text" placeholder="Beschreibung" aria-label="Positionsbeschreibung" value={it.description} onChange={(e) => setItem(i, { description: e.target.value })} />
+              <input className="field-boxed" type="number" min="1" placeholder="Menge" aria-label="Menge" value={it.quantity} onChange={(e) => setItem(i, { quantity: e.target.value })} />
+              <input className="field-boxed" type="number" min="0" step="0.01" placeholder="Einzelpreis €" aria-label="Einzelpreis" value={it.amount} onChange={(e) => setItem(i, { amount: e.target.value })} />
             </div>
           ))}
           <button type="button" className="btn btn-ghost" onClick={() => setItems((p) => [...p, { description: "", quantity: "1", amount: "" }])}>
             + Position
           </button>
 
-          <div className="flex gap-2">
-            <button type="button" onClick={create}>Entwurf erstellen</button>
+          <div className="tds-toolbar">
+            <button type="button" className="btn btn-primary" onClick={create}>Entwurf erstellen</button>
             <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Abbrechen</button>
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => setShowForm(true)}>Neue Rechnung</button>
+        <button type="button" className="btn btn-primary" onClick={() => setShowForm(true)}>Neue Rechnung</button>
       )}
 
-      <table className="lx-table">
+      <table className="tds-table">
         <thead>
           <tr>
             <th>Datum</th>
@@ -169,10 +169,10 @@ export default function BillingAdmin() {
                   </>
                 ) : null}
               </td>
-              <td className="flex gap-2">
+              <td>
                 {inv.status === "draft" ? (
                   <>
-                    <button type="button" onClick={() => void send(inv.id)}>Senden</button>
+                    <button type="button" className="btn btn-primary" onClick={() => void send(inv.id)}>Senden</button>
                     <button type="button" className="btn btn-ghost" onClick={() => setPendingDelete(inv)}>Löschen</button>
                   </>
                 ) : null}
