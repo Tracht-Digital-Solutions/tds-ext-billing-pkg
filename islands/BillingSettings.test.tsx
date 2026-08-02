@@ -70,7 +70,7 @@ describe("loading", () => {
 
   it("shows a loading line until the settings arrive", () => {
     render(<BillingSettings />);
-    expect(screen.getByText("Wird geladen …")).toBeTruthy();
+    expect(screen.getByLabelText("Wird geladen")).toBeTruthy();
   });
 
   it("reports BOTH secrets as unconfigured when neither is set", async () => {
@@ -183,7 +183,7 @@ describe("loading", () => {
     getReply = { status: 500, body: {} };
     render(<BillingSettings />);
     await screen.findByText("Fehler (HTTP 500).");
-    expect(screen.queryByText("Wird geladen …")).toBeNull();
+    expect(screen.queryByLabelText("Wird geladen")).toBeNull();
   });
 
   it("does NOT apply values carried by a non-OK response", async () => {

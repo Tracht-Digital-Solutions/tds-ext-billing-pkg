@@ -108,7 +108,7 @@ describe("loading", () => {
 
   it("shows a loading line until the list arrives", () => {
     render(<BillingAdmin />);
-    expect(screen.getByText("Wird geladen …")).toBeTruthy();
+    expect(screen.getByLabelText("Wird geladen")).toBeTruthy();
   });
 
   it("says so when nothing has been invoiced", async () => {
@@ -188,7 +188,7 @@ describe("loading", () => {
     respond(/^\/admin\/invoices$/, {}, 500, "GET");
     render(<BillingAdmin />);
     await screen.findByText("Fehler (HTTP 500).");
-    expect(screen.queryByText("Wird geladen …")).toBeNull();
+    expect(screen.queryByLabelText("Wird geladen")).toBeNull();
   });
 
   it("tolerates a response with no invoices field", async () => {

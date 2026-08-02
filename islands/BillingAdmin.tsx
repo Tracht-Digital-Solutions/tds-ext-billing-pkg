@@ -107,7 +107,7 @@ export default function BillingAdmin() {
     }
   };
 
-  if (!loaded) return <p role="status"><Spinner /></p>;
+  if (!loaded) return <p><Spinner /></p>;
 
   return (
     <div className="billing-admin">

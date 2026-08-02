@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Skeleton } from "@tracht-digital-solutions/tds-shared/components";
 
 interface Summary {
   configured: boolean;
@@ -18,7 +19,7 @@ export default function WidgetBody() {
   }, []);
 
   if (error) return <p className="tds-widget__metric">—</p>;
-  if (!data) return <p className="tds-widget__metric">…</p>;
+  if (!data) return <p className="tds-widget__metric" aria-busy="true"><Skeleton width="3ch" height="1.75rem" /></p>;
 
   return (
     <div className="tds-stack">
