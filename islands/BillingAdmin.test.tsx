@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import BillingAdmin from "./BillingAdmin";
+import { TOAST_EVENT } from "@tracht-digital-solutions/tds-shared/toast";
 
 /**
  * The invoice admin. This island creates invoices and hands them to STRIPE,
@@ -55,7 +56,15 @@ const DRAFT = {
 };
 const OPEN = { ...DRAFT, id: 4, status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/abc" };
 
+/** Outcomes are toasts now — collected off the `tds:toast` bus. */
+let toasts: Array<{ variant: string; message: string }> = [];
+const collectToast = (e: Event) => {
+  toasts.push((e as CustomEvent<{ variant: string; message: string }>).detail);
+};
+
 beforeEach(() => {
+  toasts = [];
+  window.addEventListener(TOAST_EVENT, collectToast);
   calls = [];
   handlers = [() => ({ status: 200, body: {} })];
   respond(/^\/admin\/invoices$/, { invoices: [] });
@@ -70,7 +79,10 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  window.removeEventListener(TOAST_EVENT, collectToast);
+  cleanup();
+});
 
 const user = () => userEvent.setup({ delay: null });
 const sent = (method: string, match: RegExp) => calls.filter((c) => c.method === method && match.test(c.url));
@@ -174,7 +186,7 @@ describe("loading", () => {
   it("reports any other failure with its status", async () => {
     respond(/^\/admin\/invoices$/, {}, 500, "GET");
     render(<BillingAdmin />);
-    expect(await screen.findByText("Fehler (HTTP 500).")).toBeTruthy();
+    expect(await screen.findByText("Rechnungen konnten nicht geladen werden (HTTP 500).")).toBeTruthy();
   });
 
   it("does NOT list invoices carried by a non-OK response", async () => {
@@ -187,7 +199,7 @@ describe("loading", () => {
   it("leaves the loading state even when the request fails", async () => {
     respond(/^\/admin\/invoices$/, {}, 500, "GET");
     render(<BillingAdmin />);
-    await screen.findByText("Fehler (HTTP 500).");
+    await screen.findByText("Rechnungen konnten nicht geladen werden (HTTP 500).");
     expect(screen.queryByLabelText("Wird geladen")).toBeNull();
   });
 
@@ -244,22 +256,22 @@ describe("sending an invoice to Stripe", () => {
   it("confirms the hand-off", async () => {
     const u = await open([DRAFT]);
     await u.click(within(row("Entwurf")).getByRole("button", { name: "Senden" }));
-    expect(await screen.findByText("An Stripe gesendet.")).toBeTruthy();
+    await waitFor(() => expect(toasts.some((t) => t.variant === "success" && t.message.includes("An Stripe gesendet"))).toBe(true));
   });
 
   it("does NOT claim a hand-off that failed", async () => {
     respond(/send$/, { error: "Stripe: no such customer" }, 502, "POST");
     const u = await open([DRAFT]);
     await u.click(within(row("Entwurf")).getByRole("button", { name: "Senden" }));
-    expect(await screen.findByText("Fehler: Stripe: no such customer")).toBeTruthy();
-    expect(screen.queryByText("An Stripe gesendet.")).toBeNull();
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("Stripe"))).toBe(true));
+    expect(toasts.some((t) => t.message.includes("An Stripe gesendet"))).toBe(false);
   });
 
   it("falls back to the status code when Stripe returns no message", async () => {
     respond(/send$/, {}, 502, "POST");
     const u = await open([DRAFT]);
     await u.click(within(row("Entwurf")).getByRole("button", { name: "Senden" }));
-    expect(await screen.findByText("Fehler: 502")).toBeTruthy();
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("502"))).toBe(true));
   });
 
   it("re-reads the list either way, so a half-finished send cannot hide", async () => {
@@ -273,27 +285,43 @@ describe("sending an invoice to Stripe", () => {
 });
 
 describe("deleting a draft", () => {
+  // Deleting an invoice moved behind the shared <ConfirmDialog> — it is a
+  // financial record — and these tests were never migrated with it, so they
+  // clicked the row button and waited for a DELETE that now only fires once
+  // the dialog is confirmed. All three had been failing.
+  async function pressDelete(u: ReturnType<typeof user>, target?: HTMLElement) {
+    await u.click(within(target ?? row("Entwurf")).getByRole("button", { name: "Löschen" }));
+    await u.click(screen.getAllByRole("button", { name: /Löschen/ }).at(-1)!);
+  }
+
   it("deletes the draft it was asked to delete", async () => {
     const u = await open([DRAFT, { ...DRAFT, id: 9, total_cents: 100 }]);
     const second = screen.getAllByRole("row").filter((r) => r.textContent!.includes("Entwurf"))[1]!;
-    await u.click(within(second).getByRole("button", { name: "Löschen" }));
+    await pressDelete(u, second);
     await waitFor(() => expect(sent("DELETE", /invoices\/9$/)).toHaveLength(1));
     expect(sent("DELETE", /invoices\/3$/)).toHaveLength(0);
   });
 
-  it("reloads the list afterwards", async () => {
+  it("sends nothing until the dialog is confirmed", async () => {
     const u = await open([DRAFT]);
     await u.click(within(row("Entwurf")).getByRole("button", { name: "Löschen" }));
+    expect(sent("DELETE", /invoices/)).toHaveLength(0);
+  });
+
+  it("reloads the list afterwards", async () => {
+    const u = await open([DRAFT]);
+    await pressDelete(u);
     await waitFor(() => expect(sent("GET", /^\/admin\/invoices$/)).toHaveLength(2));
   });
 
-  it("does NOT reload after a failed delete", async () => {
+  it("does NOT reload after a failed delete, and says why", async () => {
     // A reload would make it look as though the row simply vanished.
     respond(/invoices\/3$/, { error: "nope" }, 500, "DELETE");
     const u = await open([DRAFT]);
-    await u.click(within(row("Entwurf")).getByRole("button", { name: "Löschen" }));
+    await pressDelete(u);
     await waitFor(() => expect(sent("DELETE", /invoices\/3$/)).toHaveLength(1));
     expect(sent("GET", /^\/admin\/invoices$/)).toHaveLength(1);
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("500"))).toBe(true));
   });
 });
 
@@ -471,7 +499,7 @@ describe("creating a draft", () => {
     const u = await open();
     await fillOnePosition(u);
     await u.click(screen.getByRole("button", { name: "Entwurf erstellen" }));
-    expect(await screen.findByText("Entwurf erstellt.")).toBeTruthy();
+    await waitFor(() => expect(toasts.some((t) => t.variant === "success" && t.message.includes("Entwurf erstellt"))).toBe(true));
     expect(screen.queryByPlaceholderText("Einzelpreis €")).toBeNull();
     await waitFor(() => expect(sent("GET", /^\/admin\/invoices$/)).toHaveLength(2));
     await u.click(screen.getByRole("button", { name: "Neue Rechnung" }));
@@ -484,7 +512,7 @@ describe("creating a draft", () => {
     const u = await open();
     await fillOnePosition(u, "Konzeption", undefined, "100");
     await u.click(screen.getByRole("button", { name: "Entwurf erstellen" }));
-    expect(await screen.findByText("Fehler (HTTP 500).")).toBeTruthy();
+await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("500"))).toBe(true));
     expect((screen.getByPlaceholderText("Beschreibung") as HTMLInputElement).value).toBe("Konzeption");
   });
 
@@ -493,7 +521,7 @@ describe("creating a draft", () => {
     const u = await open();
     await fillOnePosition(u);
     await u.click(screen.getByRole("button", { name: "Entwurf erstellen" }));
-    await screen.findByText("Fehler (HTTP 500).");
+await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("500"))).toBe(true));
     expect(sent("GET", /^\/admin\/invoices$/)).toHaveLength(1);
   });
 

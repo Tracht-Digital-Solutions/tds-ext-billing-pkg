@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import BillingSettings from "./BillingSettings";
+import { TOAST_EVENT } from "@tracht-digital-solutions/tds-shared/toast";
 
 /**
  * The Stripe credentials panel, in the core runtime settings store.
@@ -22,7 +23,15 @@ let putReply: { status: number; body: unknown } = { status: 200, body: {} };
 const NS = "/admin/settings/billing";
 const KEYS = ["stripe_secret_key", "stripe_webhook_secret", "default_currency", "days_until_due"];
 
+/** Outcomes are toasts now — collected off the `tds:toast` bus. */
+let toasts: Array<{ variant: string; message: string }> = [];
+const collectToast = (e: Event) => {
+  toasts.push((e as CustomEvent<{ variant: string; message: string }>).detail);
+};
+
 beforeEach(() => {
+  toasts = [];
+  window.addEventListener(TOAST_EVENT, collectToast);
   calls = [];
   getReply = { status: 200, body: { settings: [] } };
   putReply = { status: 200, body: {} };
@@ -37,7 +46,10 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  window.removeEventListener(TOAST_EVENT, collectToast);
+  cleanup();
+});
 
 const user = () => userEvent.setup({ delay: null });
 const stored = (pairs: Record<string, string>) => ({
@@ -302,7 +314,7 @@ describe("saving", () => {
   it("confirms and re-reads the masked state after a save", async () => {
     const u = await open();
     await u.click(screen.getByRole("button", { name: "Speichern" }));
-    expect(await screen.findByText("Gespeichert.")).toBeTruthy();
+    await waitFor(() => expect(toasts.some((t) => t.variant === "success" && t.message.includes("Gespeichert"))).toBe(true));
     await waitFor(() => expect(calls.filter((c) => c.method === "GET")).toHaveLength(2));
   });
 
@@ -311,7 +323,7 @@ describe("saving", () => {
     await u.type(keyBox(), "sk_live_123");
     await u.type(whBox(), "whsec_456");
     await u.click(screen.getByRole("button", { name: "Speichern" }));
-    await screen.findByText("Gespeichert.");
+    await waitFor(() => expect(toasts.some((t) => t.variant === "success" && t.message.includes("Gespeichert"))).toBe(true));
     expect(keyBox().value).toBe("");
     expect(whBox().value).toBe("");
   });
@@ -321,7 +333,7 @@ describe("saving", () => {
     const u = await open();
     await u.type(keyBox(), "sk_live_123");
     await u.click(screen.getByRole("button", { name: "Speichern" }));
-    expect(await screen.findByText("Fehler (HTTP 500).")).toBeTruthy();
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("500"))).toBe(true));
     expect(keyBox().value).toBe("sk_live_123");
   });
 
@@ -329,7 +341,7 @@ describe("saving", () => {
     putReply = { status: 403, body: {} };
     const u = await open();
     await u.click(screen.getByRole("button", { name: "Speichern" }));
-    await screen.findByText("Fehler (HTTP 403).");
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("403"))).toBe(true));
     expect(calls.filter((c) => c.method === "GET")).toHaveLength(1);
   });
 
@@ -337,7 +349,7 @@ describe("saving", () => {
     const u = await open();
     const button = screen.getByRole("button", { name: "Speichern" }) as HTMLButtonElement;
     await u.click(button);
-    await screen.findByText("Gespeichert.");
+    await waitFor(() => expect(toasts.some((t) => t.variant === "success" && t.message.includes("Gespeichert"))).toBe(true));
     expect(button.disabled).toBe(false);
   });
 });

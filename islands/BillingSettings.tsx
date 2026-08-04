@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Spinner } from "@tracht-digital-solutions/tds-shared/components";
+import { Spinner, toast } from "@tracht-digital-solutions/tds-shared/components";
 
 interface Masked {
   key: string;
@@ -66,10 +66,10 @@ export default function BillingSettings() {
     if (res.ok) {
       setKeyInput("");
       setWhInput("");
-      setStatus("Gespeichert.");
+      toast.success("Gespeichert.");
       void load();
     } else {
-      setStatus(`Fehler (HTTP ${res.status}).`);
+      toast.danger(`Speichern fehlgeschlagen (HTTP ${res.status}).`);
     }
   };
 
@@ -97,7 +97,9 @@ export default function BillingSettings() {
           <input className="field-boxed" type="number" min="0" value={days} onChange={(e) => setDays(e.target.value)} placeholder="14" />
         </label>
       </div>
-      {status ? <p className="tds-alert" role="status">{status}</p> : null}
+      {/* Outcomes are toasts now; what is left here is the load failure and
+          form validation — i.e. a failure, which used to render in the info hue. */}
+      {status ? <p className="tds-alert tds-alert--danger" role="alert">{status}</p> : null}
       <button type="button" className="btn btn-primary" onClick={save} disabled={busy} aria-busy={busy}>Speichern</button>
     </div>
   );

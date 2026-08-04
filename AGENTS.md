@@ -70,6 +70,15 @@ concentrate on what cannot be walked back:
   would attach the invoice to customer 0.
 - The send path **re-reads the list either way**: the invoice may have reached
   Stripe even when the response failed, and only the reload shows the truth.
+- **A failed send must not look like a successful one.** `send()` funnelled
+  progress, success AND failure through one `.tds-alert` with no hue modifier —
+  so "Fehler: card_declined" rendered in the same info blue as "An Stripe
+  gesendet.", on the screen where money moves. Outcomes are now `toast.success`
+  / `toast.danger` (tds-shared `>=0.16.0`); the delete path, which used to close
+  the dialog and say nothing at all on failure, reports too. What stays in-flow
+  is the **load failure** (persistent state) and form **validation** — both now
+  in `.tds-alert--danger`, because that banner only carries failures now.
+  Never mount a `ToastHost` here; the frontend host owns the only one.
 
 `islands/BillingSettings.test.tsx` — the two Stripe secrets are **not
 interchangeable**: the API key authenticates our calls *to* Stripe, the webhook

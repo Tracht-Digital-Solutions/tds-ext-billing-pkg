@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ConfirmDialog, Spinner } from "@tracht-digital-solutions/tds-shared/components";
+import { ConfirmDialog, Spinner, toast } from "@tracht-digital-solutions/tds-shared/components";
 
 const api = (path: string, init?: RequestInit) => fetch(path, { credentials: "include", ...init });
 
@@ -39,7 +39,10 @@ export default function BillingAdmin() {
   const load = async () => {
     const res = await api("/admin/invoices");
     if (res.ok) setInvoices((await res.json()).invoices ?? []);
-    else setStatus(res.status === 403 ? "Nur für Administratoren." : `Fehler (HTTP ${res.status}).`);
+    // A failed LOAD is persistent state (the list stays empty until it is
+    // fixed), so it keeps the in-flow banner — but it is a failure, and the
+    // banner used to render it in the info hue.
+    else setStatus(res.status === 403 ? "Nur für Administratoren." : `Rechnungen konnten nicht geladen werden (HTTP ${res.status}).`);
     setLoaded(true);
   };
   useEffect(() => {
@@ -58,6 +61,7 @@ export default function BillingAdmin() {
         unit_amount_cents: Math.round(Number(it.amount) * 100),
       }));
     if (payloadItems.length === 0) {
+      // Validation stays in the form — it names what the user must still fix.
       setStatus("Mindestens eine Position mit Betrag angeben.");
       return;
     }
@@ -77,18 +81,22 @@ export default function BillingAdmin() {
       setDescription("");
       setDueDate("");
       setItems([{ description: "", quantity: "1", amount: "" }]);
-      setStatus("Entwurf erstellt.");
+      setStatus(null);
+      toast.success("Entwurf erstellt.");
       void load();
     } else {
-      setStatus(`Fehler (HTTP ${res.status}).`);
+      toast.danger(`Entwurf konnte nicht erstellt werden (HTTP ${res.status}).`);
     }
   };
 
   const send = async (id: number) => {
-    setStatus("Sende an Stripe …");
+    // This funnelled progress, success AND failure through one info-hued
+    // banner, so "Fehler: card_declined" was rendered in the same blue as
+    // "An Stripe gesendet." — a failed transfer that looked like a success.
     const res = await api(`/admin/invoices/${id}/send`, { method: "POST" });
     const d = await res.json().catch(() => ({}));
-    setStatus(res.ok ? "An Stripe gesendet." : `Fehler: ${d.error ?? res.status}`);
+    if (res.ok) toast.success("An Stripe gesendet.");
+    else toast.danger(`Senden fehlgeschlagen: ${d.error ?? `HTTP ${res.status}`}`);
     void load();
   };
 
@@ -101,7 +109,17 @@ export default function BillingAdmin() {
     try {
       const res = await api(`/admin/invoices/${inv.id}`, { method: "DELETE" });
       setPendingDelete(null);
-      if (res.ok) void load();
+      if (res.ok) {
+        toast.success("Rechnung gelöscht.");
+        void load();
+      } else {
+        // Used to close the dialog and do nothing else — on a financial
+        // record, of all things.
+        toast.danger(`Löschen fehlgeschlagen (HTTP ${res.status}).`);
+      }
+    } catch {
+      setPendingDelete(null);
+      toast.danger("Löschen fehlgeschlagen — die API ist nicht erreichbar.");
     } finally {
       setDeleting(false);
     }
@@ -111,7 +129,9 @@ export default function BillingAdmin() {
 
   return (
     <div className="tds-stack">
-      {status ? <p className="tds-alert" role="status">{status}</p> : null}
+      {/* Only the load failure and form validation reach this now (outcomes
+          are toasts), so it is a failure banner and gets the danger hue. */}
+      {status ? <p className="tds-alert tds-alert--danger" role="alert">{status}</p> : null}
 
       {showForm ? (
         <div className="tds-card tds-stack">
