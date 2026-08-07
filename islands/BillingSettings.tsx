@@ -87,7 +87,7 @@ export default function BillingSettings() {
         <span className="text-sm">Webhook Secret <em className="opacity-60">({hint(whState)})</em></span>
         <input className="field-boxed" type="password" value={whInput} onChange={(e) => setWhInput(e.target.value)} placeholder="whsec_… (leer = behalten)" autoComplete="off" />
       </label>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm">Standard-Währung</span>
           <input className="field-boxed" type="text" maxLength={3} value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="EUR" />

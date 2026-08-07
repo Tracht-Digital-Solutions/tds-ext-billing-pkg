@@ -191,10 +191,13 @@ export default function BillingAdmin() {
               </td>
               <td>
                 {inv.status === "draft" ? (
-                  <>
+                  // Bare siblings in a cell: a <td> is a table-cell, so there
+                  // was no flex and no gap here — the two buttons sat flush
+                  // and the column could not wrap them on a narrow screen.
+                  <span className="tds-toolbar">
                     <button type="button" className="btn btn-primary" onClick={() => void send(inv.id)}>Senden</button>
                     <button type="button" className="btn btn-ghost" onClick={() => setPendingDelete(inv)}>Löschen</button>
-                  </>
+                  </span>
                 ) : null}
               </td>
             </tr>
