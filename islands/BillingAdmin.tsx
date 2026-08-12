@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ConfirmDialog, Spinner, toast } from "@tracht-digital-solutions/tds-shared/components";
+import { apiFetch } from "@tracht-digital-solutions/tds-shared/api";
 
-const api = (path: string, init?: RequestInit) => fetch(path, { credentials: "include", ...init });
+const api = apiFetch;
 
 interface Invoice {
   id: number;
