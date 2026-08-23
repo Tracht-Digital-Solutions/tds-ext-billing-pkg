@@ -31,6 +31,27 @@ see their own invoices + the hosted pay link.
 
 ## Key gotchas (don't regress)
 
+- **Never guard a container binding with `!$c->has(X::class)` — the dashboard
+  billing widget 500'd for months because of it.** PHP-DI answers `has()` out of
+  its definition sources, and *autowiring is one of them*: for any concrete,
+  instantiable class the answer is always `true`, bound or not. So the guard that
+  wrapped `InvoiceRepository` **and** `StripeClient` never ran, and the container
+  quietly autowired instead. For the repository that is invisible — its only
+  argument is the bound `PDO`. For `StripeClient` it is fatal, because its
+  constructor takes a string:
+
+  ```
+  Entry "…\Service\StripeClient" cannot be resolved:
+  Parameter $secretKey of __construct() has no value defined or guessable
+  ```
+
+  `GET /billing/summary` — the widget every admin dashboard renders — answered
+  **500**, and the settings-store factory that reads `billing.stripe_secret_key`
+  had never run once. Nothing went red: this repo's CI runs type-check + build,
+  not tests, and a PHP-DI entry is built lazily. The module owns these classes
+  and nothing else defines them, so **bind unconditionally**. Pinned by
+  `ExtensionBindingsTest` in `tds-core-frontend-api`.
+
 - **Call the API with `apiFetch` from `@tracht-digital-solutions/tds-shared/api`,
   never a relative `fetch`.** Every island used to define its own
   `const api = (path, init) => fetch(path, { credentials: "include", ...init })`

@@ -68,7 +68,18 @@ final class BillingModule extends AbstractModule implements ApiDocSource
     public function register(App $app): void
     {
         $c = $app->getContainer();
-        if ($c !== null && !$c->has(InvoiceRepository::class)) {
+        // NEVER guard these with `!$c->has(X)`. PHP-DI answers `has()` from its
+        // definition sources, and autowiring is one of them: for any *concrete,
+        // instantiable* class the answer is always true, whether or not anyone
+        // ever bound it. So the guard skipped both bindings and the container
+        // silently autowired instead — invisible for the repository (its only
+        // argument is the bound PDO, so the object is identical), fatal for the
+        // StripeClient, whose constructor takes a string PHP-DI cannot guess:
+        // `/billing/summary` — the dashboard widget — answered 500 with
+        // `Parameter $secretKey of __construct() has no value defined or
+        // guessable`, and the settings-store factory never ran at all. The
+        // module owns these classes; nothing else defines them.
+        if ($c !== null) {
             $c->set(InvoiceRepository::class, static fn ($c) => new InvoiceRepository($c->get(PDO::class)));
             $c->set(StripeClient::class, static function ($c): StripeClient {
                 $key = self::store($c)?->getSecret(self::NS, 'stripe_secret_key');
