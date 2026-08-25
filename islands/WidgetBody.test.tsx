@@ -8,7 +8,8 @@
 const pathOf = (url: string) => String(url).replace(/^https?:\/\/[^/]+/i, "");
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { primeRuntimeConfig } from "@tracht-digital-solutions/tds-shared/api";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import WidgetBody from "./WidgetBody";
 
 /**
@@ -37,9 +38,19 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+// apiFetch consults the host-side runtime config (/tds-runtime.json) before it
+// resolves a URL, so without this the first entry in fetch.mock.calls is that
+// probe rather than the endpoint under test. The panel products never ship the
+// file — they render <meta name="tds-api-base"> instead — so "absent" is also
+// what actually happens in production.
+beforeEach(() => primeRuntimeConfig(null));
+
 describe("the widget", () => {
-  it("fetches its summary endpoint with credentials", () => {
-    render(<WidgetBody />);
+  it("fetches its summary endpoint with credentials", async () => {
+    render(<WidgetBody />);    
+    // apiFetch awaits the host-side runtime config before it resolves a URL,
+    // so the request leaves on a later microtask than the render.
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
     const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
     expect(pathOf(fetchMock.mock.calls[0]![0] as string)).toBe("/billing/summary");
     // Absolute, on the API host. Every other assertion here matches the PATH,
