@@ -374,3 +374,38 @@ describe("saving", () => {
     expect(button.disabled).toBe(false);
   });
 });
+
+/**
+ * Make matching requests fail the way fetch does when the network is gone:
+ * `apiFetch` resolves every HTTP status, but a request that never reaches the
+ * API rejects with a TypeError. Everything else still gets the stub above.
+ */
+function unreachable(match: (path: string, method: string) => boolean = () => true) {
+  const answer = fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (match(pathOf(url), init?.method ?? "GET")) throw new TypeError("Failed to fetch");
+      return answer(url, init);
+    }),
+  );
+}
+
+describe("when the API cannot be reached", () => {
+  it("says so instead of loading forever", async () => {
+    unreachable();
+    render(<BillingSettings />);
+    expect(await screen.findByText("Einstellungen konnten nicht geladen werden — die API ist nicht erreichbar.")).toBeTruthy();
+    expect(screen.queryByLabelText("Wird geladen")).toBeNull();
+  });
+
+  it("reports a save that never arrived and keeps the typed secrets", async () => {
+    const u = await open();
+    unreachable((_, method) => method === "PUT");
+    await u.type(keyBox(), "sk_live_123");
+    await u.click(screen.getByRole("button", { name: "Speichern" }));
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("nicht erreichbar"))).toBe(true));
+    expect(keyBox().value).toBe("sk_live_123");
+    expect((screen.getByRole("button", { name: "Speichern" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});

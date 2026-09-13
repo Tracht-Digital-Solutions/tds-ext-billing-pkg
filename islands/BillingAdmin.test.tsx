@@ -555,3 +555,46 @@ await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.messag
     expect(created()).toHaveLength(0);
   });
 });
+
+/**
+ * Make matching requests fail the way fetch does when the network is gone:
+ * `apiFetch` resolves every HTTP status, but a request that never reaches the
+ * API rejects with a TypeError. Everything else still gets the stub above.
+ */
+function unreachable(match: (path: string, method: string) => boolean = () => true) {
+  const answer = fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (match(pathOf(url), init?.method ?? "GET")) throw new TypeError("Failed to fetch");
+      return answer(url, init);
+    }),
+  );
+}
+
+describe("when the API cannot be reached", () => {
+  it("says so instead of loading forever", async () => {
+    unreachable();
+    render(<BillingAdmin />);
+    expect(await screen.findByText("Rechnungen konnten nicht geladen werden — die API ist nicht erreichbar.")).toBeTruthy();
+    expect(screen.queryByLabelText("Wird geladen")).toBeNull();
+  });
+
+  it("keeps the form when a new draft never arrived", async () => {
+    const u = await open();
+    unreachable((path, method) => method === "POST" && path === "/admin/invoices");
+    await fillOnePosition(u, "Konzeption", undefined, "100");
+    await u.click(screen.getByRole("button", { name: "Entwurf erstellen" }));
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("nicht erreichbar"))).toBe(true));
+    expect((screen.getByPlaceholderText("Beschreibung") as HTMLInputElement).value).toBe("Konzeption");
+    expect(toasts.some((t) => t.message.includes("Entwurf erstellt"))).toBe(false);
+  });
+
+  it("does not claim a send that never reached the API", async () => {
+    const u = await open([DRAFT]);
+    unreachable((path, method) => method === "POST" && /\/send$/.test(path));
+    await u.click(within(row("Entwurf")).getByRole("button", { name: "Senden" }));
+    await waitFor(() => expect(toasts.some((t) => t.variant === "danger" && t.message.includes("nicht erreichbar"))).toBe(true));
+    expect(toasts.some((t) => t.message.includes("An Stripe gesendet"))).toBe(false);
+  });
+});

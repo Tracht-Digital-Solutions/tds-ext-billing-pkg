@@ -38,7 +38,14 @@ export default function BillingAdmin() {
   const [items, setItems] = useState<ItemForm[]>([{ description: "", quantity: "1", amount: "" }]);
 
   const load = async () => {
-    const res = await api("/admin/invoices");
+    // apiFetch hands back every HTTP status, but a request that never reaches
+    // the API rejects. Uncaught, the list stayed on its spinner for good.
+    const res = await api("/admin/invoices").catch(() => null);
+    if (res === null) {
+      setStatus("Rechnungen konnten nicht geladen werden — die API ist nicht erreichbar.");
+      setLoaded(true);
+      return;
+    }
     if (res.ok) setInvoices((await res.json()).invoices ?? []);
     // A failed LOAD is persistent state (the list stays empty until it is
     // fixed), so it keeps the in-flow banner — but it is a failure, and the
@@ -75,7 +82,12 @@ export default function BillingAdmin() {
         due_date: dueDate || null,
         items: payloadItems,
       }),
-    });
+    }).catch(() => null);
+    if (res === null) {
+      // The form stays open with everything typed into it.
+      toast.danger("Entwurf konnte nicht erstellt werden — die API ist nicht erreichbar.");
+      return;
+    }
     if (res.ok) {
       setShowForm(false);
       setCustomerId("");
@@ -94,7 +106,14 @@ export default function BillingAdmin() {
     // This funnelled progress, success AND failure through one info-hued
     // banner, so "Fehler: card_declined" was rendered in the same blue as
     // "An Stripe gesendet." — a failed transfer that looked like a success.
-    const res = await api(`/admin/invoices/${id}/send`, { method: "POST" });
+    const res = await api(`/admin/invoices/${id}/send`, { method: "POST" }).catch(() => null);
+    if (res === null) {
+      // A dropped connection can still have delivered the request; the reload
+      // below shows the invoice's real status.
+      toast.danger("Senden fehlgeschlagen — die API ist nicht erreichbar.");
+      void load();
+      return;
+    }
     const d = await res.json().catch(() => ({}));
     if (res.ok) toast.success("An Stripe gesendet.");
     else toast.danger(`Senden fehlgeschlagen: ${d.error ?? `HTTP ${res.status}`}`);
