@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ConfirmDialog, Spinner, toast } from "@tracht-digital-solutions/tds-shared/components";
 import { apiFetch } from "@tracht-digital-solutions/tds-shared/api";
+import { AnimatedItem, AnimatedList } from "@tracht-digital-solutions/tds-shared/motion/react";
 
 const api = apiFetch;
 
@@ -164,13 +165,18 @@ export default function BillingAdmin() {
           </label>
 
           <h5>Positionen</h5>
-          {items.map((it, i) => (
-            <div key={i} className="tds-toolbar">
-              <input className="field-boxed" type="text" placeholder="Beschreibung" aria-label="Positionsbeschreibung" value={it.description} onChange={(e) => setItem(i, { description: e.target.value })} />
-              <input className="field-boxed" type="number" min="1" placeholder="Menge" aria-label="Menge" value={it.quantity} onChange={(e) => setItem(i, { quantity: e.target.value })} />
-              <input className="field-boxed" type="number" min="0" step="0.01" placeholder="Einzelpreis €" aria-label="Einzelpreis" value={it.amount} onChange={(e) => setItem(i, { amount: e.target.value })} />
-            </div>
-          ))}
+          {/* "+ Position" appends, so an index key is safe here — nothing is
+              removed from the middle, which is the case AnimatePresence
+              cannot tell apart from a move. */}
+          <AnimatedList as="div">
+            {items.map((it, i) => (
+              <AnimatedItem as="div" key={i} className="tds-toolbar">
+                <input className="field-boxed" type="text" placeholder="Beschreibung" aria-label="Positionsbeschreibung" value={it.description} onChange={(e) => setItem(i, { description: e.target.value })} />
+                <input className="field-boxed" type="number" min="1" placeholder="Menge" aria-label="Menge" value={it.quantity} onChange={(e) => setItem(i, { quantity: e.target.value })} />
+                <input className="field-boxed" type="number" min="0" step="0.01" placeholder="Einzelpreis €" aria-label="Einzelpreis" value={it.amount} onChange={(e) => setItem(i, { amount: e.target.value })} />
+              </AnimatedItem>
+            ))}
+          </AnimatedList>
           <button type="button" className="btn btn-ghost" onClick={() => setItems((p) => [...p, { description: "", quantity: "1", amount: "" }])}>
             + Position
           </button>

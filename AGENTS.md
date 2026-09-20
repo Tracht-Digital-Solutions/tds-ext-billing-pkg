@@ -31,6 +31,13 @@ see their own invoices + the hosted pay link.
 
 ## Key gotchas (don't regress)
 
+- **Motion kommt aus `tds-shared/motion/react` (peer `>=0.38.7`).** Die
+  Rechnungspositionen sind eine `AnimatedList`: '+ Position' haengt eine Zeile
+  an, die sichtbar dazukommt. Index-Schluessel sind hier vertretbar, weil nur
+  angehaengt und nichts aus der Mitte entfernt wird — genau das koennte
+  `AnimatePresence` nicht von einem Verschieben unterscheiden. Die
+  Rechnungstabelle bleibt statisch.
+
 - **Never guard a container binding with `!$c->has(X::class)` — the dashboard
   billing widget 500'd for months because of it.** PHP-DI answers `has()` out of
   its definition sources, and *autowiring is one of them*: for any concrete,
