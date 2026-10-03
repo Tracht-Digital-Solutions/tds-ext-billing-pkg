@@ -18,6 +18,7 @@ use Tds\Frontend\Contract\PermissionDef;
 use Tds\Frontend\Contract\SettingDef;
 use Tds\Frontend\Contract\SettingsStore;
 use Tds\Frontend\Contract\UserContext;
+use Tds\Frontend\Contract\ModuleHttp;
 
 /**
  * Backend Module for Stripe billing/invoices. Admins draft invoices (line items,
@@ -32,6 +33,8 @@ use Tds\Frontend\Contract\UserContext;
  */
 final class BillingModule extends AbstractModule implements ApiDocSource
 {
+    use ModuleHttp;
+
     private const NS = 'billing';
 
     public function id(): string
@@ -364,34 +367,6 @@ final class BillingModule extends AbstractModule implements ApiDocSource
     {
         $v = trim((string) ($value ?? ''));
         return $v === '' ? null : mb_substr($v, 0, $limit);
-    }
-
-    private static function require(UserContext $user, string $permission, Response $res): ?Response
-    {
-        if (!$user->isAuthenticated()) {
-            return self::json($res, ['error' => 'Unauthorized'], 401);
-        }
-        if (!$user->has($permission)) {
-            return self::json($res, ['error' => 'Forbidden'], 403);
-        }
-        return null;
-    }
-
-    private static function requireAdmin(UserContext $user, Response $res): ?Response
-    {
-        if (!$user->isAuthenticated()) {
-            return self::json($res, ['error' => 'Unauthorized'], 401);
-        }
-        if (!$user->isAdmin()) {
-            return self::json($res, ['error' => 'Forbidden'], 403);
-        }
-        return null;
-    }
-
-    private static function json(Response $res, mixed $data, int $status = 200): Response
-    {
-        $res->getBody()->write(json_encode($data, JSON_THROW_ON_ERROR));
-        return $res->withStatus($status)->withHeader('Content-Type', 'application/json');
     }
 
     /**
