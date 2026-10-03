@@ -121,20 +121,35 @@ final class InvoiceRepository
         if ($id === false) {
             return null;
         }
-        $upd = $this->pdo->prepare("UPDATE billing_invoice SET status = 'paid', paid_at = NOW() WHERE id = :id");
+        // Once: Stripe sends both invoice.paid and invoice.payment_succeeded,
+        // and redelivers — each one used to move paid_at again.
+        $upd = $this->pdo->prepare("UPDATE billing_invoice SET status = 'paid', paid_at = NOW() WHERE id = :id AND status <> 'paid'");
         $upd->execute([':id' => (int) $id]);
         return (int) $id;
     }
 
-    public function delete(int $id): void
+    /**
+     * Delete a draft or a voided invoice. An invoice that went to Stripe
+     * (open/paid) is a business record and stays; that used to delete too.
+     *
+     * @return bool false when no deletable invoice with that id exists
+     */
+    public function delete(int $id): bool
     {
-        $stmt = $this->pdo->prepare('DELETE FROM billing_invoice WHERE id = :id');
+        $stmt = $this->pdo->prepare("DELETE FROM billing_invoice WHERE id = :id AND status IN ('draft', 'void')");
         $stmt->execute([':id' => $id]);
+        return $stmt->rowCount() > 0;
     }
 
-    public function openCount(): int
+    /** Open invoices — of one company, or all of them when `$customerId` is null. */
+    public function openCount(?int $customerId = null): int
     {
-        return (int) $this->pdo->query("SELECT COUNT(*) FROM billing_invoice WHERE status = 'open'")->fetchColumn();
+        if ($customerId === null) {
+            return (int) $this->pdo->query("SELECT COUNT(*) FROM billing_invoice WHERE status = 'open'")->fetchColumn();
+        }
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM billing_invoice WHERE status = 'open' AND customer_id = :cid");
+        $stmt->execute([':cid' => $customerId]);
+        return (int) $stmt->fetchColumn();
     }
 
     /** @param array<string,mixed> $r */

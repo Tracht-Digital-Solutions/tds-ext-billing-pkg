@@ -92,12 +92,21 @@ final class BillingModule extends AbstractModule implements ApiDocSource
 
         // Widget summary.
         $app->get('/billing/summary', function (Request $req, Response $res) use ($c): Response {
-            if (($deny = self::require($c->get(UserContext::class), 'billing:read', $res)) !== null) {
+            $user = $c->get(UserContext::class);
+            if (($deny = self::require($user, 'billing:read', $res)) !== null) {
                 return $deny;
+            }
+            // A portal user sees their company's count. It was the GLOBAL
+            // number of open invoices for anyone holding billing:read.
+            if ($user->isAdmin()) {
+                $open = $c->get(InvoiceRepository::class)->openCount();
+            } else {
+                $cid = $user->activeCompanyId();
+                $open = $cid === null ? 0 : $c->get(InvoiceRepository::class)->openCount((int) $cid);
             }
             return self::json($res, [
                 'configured' => $c->get(StripeClient::class)->isConfigured(),
-                'open' => $c->get(InvoiceRepository::class)->openCount(),
+                'open' => $open,
             ]);
         });
 
@@ -141,20 +150,37 @@ final class BillingModule extends AbstractModule implements ApiDocSource
                 return $deny;
             }
             $repo = $c->get(InvoiceRepository::class);
+            $pdo = $c->get(PDO::class);
+            // One send per invoice at a time: a double click used to create
+            // two Stripe invoices, both checks having seen `draft`. A named
+            // lock needs no schema change and is released with the connection.
+            $lockName = 'tds-billing-send-' . (int) $args['id'];
+            $lock = $pdo->prepare('SELECT GET_LOCK(:n, 0)');
+            $lock->execute([':n' => $lockName]);
+            if ((int) $lock->fetchColumn() !== 1) {
+                return self::json($res, ['error' => 'Diese Rechnung wird gerade gesendet.'], 409);
+            }
+            $release = static function () use ($pdo, $lockName): void {
+                $pdo->prepare('SELECT RELEASE_LOCK(:n)')->execute([':n' => $lockName]);
+            };
             $invoice = $repo->find((int) $args['id']);
             if ($invoice === null) {
+                $release();
                 return self::json($res, ['error' => 'Not found'], 404);
             }
             if ($invoice['status'] !== 'draft') {
+                $release();
                 return self::json($res, ['error' => 'Nur Entwürfe können gesendet werden.'], 409);
             }
             $client = $c->get(StripeClient::class);
             if (!$client->isConfigured()) {
+                $release();
                 return self::json($res, ['error' => 'Stripe Secret Key nicht konfiguriert'], 503);
             }
             $body = (array) $req->getParsedBody();
-            [$name, $email] = self::customerContact($c->get(PDO::class), $invoice['customer_id'], $body);
+            [$name, $email] = self::customerContact($pdo, $invoice['customer_id'], $body);
             if ($name === '') {
+                $release();
                 return self::json($res, ['error' => 'Kein Kunde/Name für die Rechnung (customer_id oder name/email angeben).'], 422);
             }
             try {
@@ -166,9 +192,11 @@ final class BillingModule extends AbstractModule implements ApiDocSource
                     (int) self::setting($c, 'days_until_due', 'STRIPE_DAYS_UNTIL_DUE', '14'),
                 );
             } catch (StripeException $e) {
+                $release();
                 return self::json($res, ['error' => $e->getMessage()], 502);
             }
             $repo->markSent((int) $args['id'], $result['stripe_invoice_id'], $result['payment_intent_id'], $result['hosted_invoice_url']);
+            $release();
             return self::json($res, [
                 'stripe_invoice_id' => $result['stripe_invoice_id'],
                 'hosted_invoice_url' => $result['hosted_invoice_url'],
@@ -180,8 +208,13 @@ final class BillingModule extends AbstractModule implements ApiDocSource
             if (($deny = self::requireAdmin($c->get(UserContext::class), $res)) !== null) {
                 return $deny;
             }
-            $c->get(InvoiceRepository::class)->delete((int) $args['id']);
-            return self::json($res, ['ok' => true]);
+            $repo = $c->get(InvoiceRepository::class);
+            if ($repo->delete((int) $args['id'])) {
+                return self::json($res, ['ok' => true]);
+            }
+            return $repo->find((int) $args['id']) === null
+                ? self::json($res, ['error' => 'Not found'], 404)
+                : self::json($res, ['error' => 'Gesendete oder bezahlte Rechnungen werden nicht gelöscht.'], 409);
         });
 
         // --- Portal (customer's own invoices) ---------------------------------
@@ -201,7 +234,12 @@ final class BillingModule extends AbstractModule implements ApiDocSource
                 return $deny;
             }
             $invoice = $c->get(InvoiceRepository::class)->find((int) $args['id']);
-            if ($invoice === null || (!$user->isAdmin() && $invoice['customer_id'] !== $user->activeCompanyId())) {
+            // Drafts are internal: the list hides them, and so must the
+            // detail — guessing an id opened a draft before it was sent.
+            if (
+                $invoice === null
+                || (!$user->isAdmin() && ($invoice['customer_id'] !== $user->activeCompanyId() || $invoice['status'] === 'draft'))
+            ) {
                 return self::json($res, ['error' => 'Not found'], 404);
             }
             return self::json($res, $invoice);
@@ -245,7 +283,10 @@ final class BillingModule extends AbstractModule implements ApiDocSource
         $email = strtolower(trim((string) ($body['email'] ?? '')));
         if ($name === '' && $customerId !== null) {
             try {
-                $stmt = $pdo->prepare('SELECT name, email FROM customer WHERE id = :id');
+                // `company`: tds-ext-customers renamed the table
+                // (20260719100002). Against `customer` the query failed, the
+                // catch swallowed it, and sending by customer_id was a 422.
+                $stmt = $pdo->prepare('SELECT name, email FROM company WHERE id = :id');
                 $stmt->execute([':id' => $customerId]);
                 $row = $stmt->fetch();
                 if ($row !== false) {
