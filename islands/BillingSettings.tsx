@@ -91,8 +91,9 @@ export default function BillingSettings() {
 
   return (
     <div className="billing-settings space-y-4">
+      <p className="text-sm opacity-70">Nur nötig, wenn dieses Modul ein eigenes Stripe-Konto nutzen soll. Ohne eigenen Schlüssel gilt das zentrale Konto unter Einstellungen → Zahlungen (Stripe); dort stehen auch alle Webhook-Adressen.</p>
       <label className="block">
-        <span className="text-sm">Stripe Secret Key <em className="opacity-60">({hint(keyState)})</em></span>
+        <span className="text-sm">Stripe Secret Key, optional <em className="opacity-60">({hint(keyState)})</em></span>
         <input className="field-boxed" type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="sk_… (leer = behalten)" autoComplete="off" />
       </label>
       <label className="block">

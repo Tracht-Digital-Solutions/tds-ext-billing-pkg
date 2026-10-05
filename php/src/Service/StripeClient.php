@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Tds\Ext\Billing\Service;
 
+use Tds\Frontend\Contract\Stripe\StripeApi;
+use Tds\Frontend\Contract\Stripe\StripeException;
+
 /**
  * Thin Stripe API client (plain ext-curl, no SDK — the extension convention).
  * Auth is the secret key as a Bearer token; requests are form-encoded per the
@@ -10,23 +13,26 @@ namespace Tds\Ext\Billing\Service;
  * invoice items, create + finalize an invoice (returning the hosted pay URL).
  *
  * The live calls can't be exercised without a Stripe account, so they're kept
- * small + guarded; the signed-webhook path ({@see WebhookVerifier}) is the
+ * small + guarded; the signed-webhook path ({@see \Tds\Frontend\Contract\Stripe\StripeWebhook}) is the
  * unit-tested part.
  *
  * @see https://stripe.com/docs/api
  */
 final class StripeClient
 {
-    public function __construct(
-        private readonly string $secretKey,
-        private readonly string $baseUrl = 'https://api.stripe.com/v1',
-    ) {
+    /**
+     * The transport is the platform's StripeApi (tds-frontend-contract):
+     * the central account from Einstellungen → Zahlungen, or a module key
+     * that overrides it. This class keeps only the domain call.
+     */
+    public function __construct(private readonly StripeApi $api)
+    {
     }
 
     /** False when no secret key is configured — the feature is then disabled (503). */
     public function isConfigured(): bool
     {
-        return $this->secretKey !== '';
+        return $this->api->isConfigured();
     }
 
     /**
@@ -44,7 +50,7 @@ final class StripeClient
         int $daysUntilDue,
     ): array {
         $currency = strtolower($currency);
-        $customer = $this->post('/customers', array_filter([
+        $customer = $this->api->post('/customers', array_filter([
             'name' => $customerName,
             'email' => $customerEmail,
         ], static fn ($v): bool => $v !== null && $v !== ''));
@@ -52,7 +58,7 @@ final class StripeClient
 
         foreach ($items as $item) {
             $amount = (int) $item['unit_amount_cents'] * max(1, (int) $item['quantity']);
-            $this->post('/invoiceitems', [
+            $this->api->post('/invoiceitems', [
                 'customer' => $customerId,
                 'amount' => $amount,
                 'currency' => $currency,
@@ -60,7 +66,7 @@ final class StripeClient
             ]);
         }
 
-        $invoice = $this->post('/invoices', [
+        $invoice = $this->api->post('/invoices', [
             'customer' => $customerId,
             'collection_method' => 'send_invoice',
             'days_until_due' => $daysUntilDue,
@@ -68,7 +74,7 @@ final class StripeClient
         ]);
         $invoiceId = (string) ($invoice['id'] ?? '');
 
-        $final = $this->post('/invoices/' . rawurlencode($invoiceId) . '/finalize', []);
+        $final = $this->api->post('/invoices/' . rawurlencode($invoiceId) . '/finalize', []);
         return [
             'stripe_invoice_id' => (string) ($final['id'] ?? $invoiceId),
             'hosted_invoice_url' => isset($final['hosted_invoice_url']) ? (string) $final['hosted_invoice_url'] : null,
@@ -77,47 +83,4 @@ final class StripeClient
         ];
     }
 
-    /**
-     * POST a form-encoded request. Returns the decoded body on 2xx, throws otherwise.
-     *
-     * @param array<string,mixed> $params
-     * @return array<string,mixed>
-     * @throws StripeException
-     */
-    private function post(string $path, array $params): array
-    {
-        $ch = curl_init($this->baseUrl . $path);
-        if ($ch === false) {
-            throw new StripeException('Stripe-Anfrage konnte nicht initialisiert werden.', 0);
-        }
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query($params, '', '&'),
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $this->secretKey,
-                'Content-Type: application/x-www-form-urlencoded',
-            ],
-            CURLOPT_TIMEOUT => 20,
-            CURLOPT_CONNECTTIMEOUT => 5,
-        ]);
-        $raw = curl_exec($ch);
-        if ($raw === false) {
-            $err = curl_error($ch);
-            curl_close($ch);
-            throw new StripeException('Stripe nicht erreichbar: ' . $err, 0);
-        }
-        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
-
-        $body = json_decode((string) $raw, true);
-        $body = is_array($body) ? $body : [];
-        if ($status < 200 || $status >= 300) {
-            $msg = isset($body['error']['message']) && is_string($body['error']['message'])
-                ? $body['error']['message']
-                : 'HTTP ' . $status;
-            throw new StripeException('Stripe: ' . $msg, $status);
-        }
-        return $body;
-    }
 }

@@ -10,8 +10,8 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
 use Tds\Ext\Billing\Domain\InvoiceRepository;
 use Tds\Ext\Billing\Service\StripeClient;
-use Tds\Ext\Billing\Service\StripeException;
-use Tds\Ext\Billing\Service\WebhookVerifier;
+use Tds\Frontend\Contract\Stripe\StripeException;
+use Tds\Frontend\Contract\Stripe\StripeWebhook;
 use Tds\Frontend\Contract\AbstractModule;
 use Tds\Frontend\Contract\ApiDocSource;
 use Tds\Frontend\Contract\PermissionDef;
@@ -19,6 +19,10 @@ use Tds\Frontend\Contract\SettingDef;
 use Tds\Frontend\Contract\SettingsStore;
 use Tds\Frontend\Contract\UserContext;
 use Tds\Frontend\Contract\ModuleHttp;
+use Tds\Frontend\Contract\Stripe\StripeWebhookDef;
+use Tds\Frontend\Contract\Stripe\StripeWebhookSource;
+use Tds\Frontend\Contract\Stripe\StripeApi;
+use Tds\Frontend\Contract\Stripe\CurlStripeApi;
 
 /**
  * Backend Module for Stripe billing/invoices. Admins draft invoices (line items,
@@ -31,7 +35,7 @@ use Tds\Frontend\Contract\ModuleHttp;
  * signature-verified. Config (Stripe keys, defaults) via the core
  * {@see SettingsStore} (ns=`billing`), DB-first with env fallback.
  */
-final class BillingModule extends AbstractModule implements ApiDocSource
+final class BillingModule extends AbstractModule implements ApiDocSource, StripeWebhookSource
 {
     use ModuleHttp;
 
@@ -61,11 +65,23 @@ final class BillingModule extends AbstractModule implements ApiDocSource
     public function settings(): array
     {
         return [
-            new SettingDef('stripe_secret_key', 'Stripe Secret Key', true, 'billing'),
+            new SettingDef('stripe_secret_key', 'Stripe Secret Key (optional — leer = zentrales Konto)', true, 'billing'),
             new SettingDef('stripe_webhook_secret', 'Stripe Webhook Secret', true, 'billing'),
             new SettingDef('default_currency', 'Standard-Währung', false, 'billing', 'EUR'),
             new SettingDef('days_until_due', 'Zahlungsziel (Tage)', false, 'billing', '14'),
         ];
+    }
+
+    /** Listed in the admin panel under Einstellungen → Zahlungen (Stripe). */
+    public function stripeWebhooks(): array
+    {
+        return [new StripeWebhookDef(
+            'Rechnungen',
+            '/billing/webhook',
+            ['invoice.paid', 'invoice.payment_succeeded'],
+            self::NS,
+            'stripe_webhook_secret',
+        )];
     }
 
     public function register(App $app): void
@@ -85,11 +101,17 @@ final class BillingModule extends AbstractModule implements ApiDocSource
         if ($c !== null) {
             $c->set(InvoiceRepository::class, static fn ($c) => new InvoiceRepository($c->get(PDO::class)));
             $c->set(StripeClient::class, static function ($c): StripeClient {
-                $key = self::store($c)?->getSecret(self::NS, 'stripe_secret_key');
-                if ($key === null || $key === '') {
-                    $key = self::env('STRIPE_SECRET_KEY', '');
+                // Its own key overrides the platform account; otherwise the
+                // central one from Einstellungen → Zahlungen (Stripe), which
+                // itself falls back to STRIPE_SECRET_KEY on the host.
+                $own = (string) (self::store($c)?->getSecret(self::NS, 'stripe_secret_key') ?? '');
+                if ($own !== '') {
+                    return new StripeClient(new CurlStripeApi($own));
                 }
-                return new StripeClient($key);
+                $central = $c->has(StripeApi::class) ? $c->get(StripeApi::class) : null;
+                return new StripeClient($central instanceof StripeApi
+                    ? $central
+                    : new CurlStripeApi(self::env('STRIPE_SECRET_KEY', '')));
             });
         }
 
@@ -258,7 +280,7 @@ final class BillingModule extends AbstractModule implements ApiDocSource
                 return self::json($res, ['error' => 'Webhook secret not configured'], 503);
             }
             $payload = (string) $req->getBody();
-            if (!WebhookVerifier::verify($payload, $req->getHeaderLine('Stripe-Signature'), $secret)) {
+            if (!StripeWebhook::verify($payload, $req->getHeaderLine('Stripe-Signature'), $secret)) {
                 return self::json($res, ['error' => 'Invalid signature'], 400);
             }
             $event = json_decode($payload, true);
