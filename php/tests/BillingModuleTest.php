@@ -99,7 +99,7 @@ final class BillingModuleTest extends TestCase
     {
         $m = new BillingModule();
         self::assertSame('billing', $m->id());
-        self::assertSame(['billing:read', 'billing:write'], array_map(static fn ($p): string => $p->id, $m->permissions()));
+        self::assertSame(['billing:read', 'billing:write', 'invoices:read'], array_map(static fn ($p): string => $p->id, $m->permissions()));
         self::assertDirectoryExists($m->migrations()[0]);
         self::assertSame(
             ['stripe_secret_key', 'stripe_webhook_secret', 'default_currency', 'days_until_due'],
@@ -127,6 +127,16 @@ final class BillingModuleTest extends TestCase
     public function testPortalListRequiresPermission(): void
     {
         self::assertSame(403, $this->get($this->appWith(new FakeUser(perms: [])), '/billing/invoices')->getStatusCode());
+    }
+
+    public function testPortalListAcceptsThePortalKey(): void
+    {
+        // The auth API's system groups (Vollzugriff, Buchhaltung, Nur Lesen)
+        // grant `invoices:read`, the portal's own key — not `billing:read`.
+        $res = $this->get($this->appWith(new FakeUser(perms: ['invoices:read'], company: null)), '/billing/invoices');
+        self::assertSame(200, $res->getStatusCode());
+        // …and it opens nothing on the admin side.
+        self::assertSame(403, $this->get($this->appWith(new FakeUser(perms: ['invoices:read'])), '/admin/invoices')->getStatusCode());
     }
 
     public function testPortalListEmptyWithoutCompany(): void

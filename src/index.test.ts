@@ -64,8 +64,11 @@ describe("permissions", () => {
   it("gates the page and the widget on read, never on nothing", () => {
     // This hub exposes customer names, rates and invoices; an ungated route
     // would show them to every logged-in user of the product.
+    // The page answers both products: the portal opens it on its own key,
+    // `invoices:read` (the API then serves only the active company's sent
+    // invoices); the admin island behind it still needs a platform admin.
     for (const route of manifest.routes ?? []) {
-      expect(route.permission, `route ${route.pattern} is ungated`).toBe("billing:read");
+      expect(route.permission, `route ${route.pattern} is ungated`).toMatch(/^(billing|invoices):read$/);
     }
     for (const widget of manifest.widgets ?? []) {
       expect(widget.permission, `widget ${widget.id} is ungated`).toBe("billing:read");

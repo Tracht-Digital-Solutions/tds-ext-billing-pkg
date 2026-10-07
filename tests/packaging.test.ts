@@ -34,8 +34,8 @@ const specifiers = [
   ...(manifest.settings ?? []).map((s) => s.island),
 ];
 
-/** The minor line the admin product caret-pins this package at (`^0.1.1`). */
-const PINNED_MINOR_LINE = "0.1";
+/** The minor line both products caret-pin this package at (`^0.2.0`). */
+const PINNED_MINOR_LINE = "0.2";
 
 /** `@scope/name/pages/Index.astro` → `pages/Index.astro` */
 const subpath = (spec: string) => spec.slice(pkg.name.length + 1);

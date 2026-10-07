@@ -191,7 +191,9 @@ describe("loading", () => {
     const link = within(row("Offen")).getByRole("link") as HTMLAnchorElement;
     expect(link.getAttribute("href")).toBe("https://invoice.stripe.com/i/abc");
     expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.getAttribute("rel")).toBe("noreferrer");
+    expect(link.getAttribute("rel")?.split(" ").sort()).toEqual(["noopener", "noreferrer"]);
+    // A labelled control, not a bare arrow a screen reader reads as "Pfeil".
+    expect(link.getAttribute("aria-label")).toContain("Stripe");
   });
 
   it("shows no link when Stripe has not hosted it yet", async () => {

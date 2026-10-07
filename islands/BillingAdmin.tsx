@@ -207,13 +207,22 @@ export default function BillingAdmin() {
               <td>{inv.customer_id ?? "—"}</td>
               <td>{euros(inv.total_cents, inv.currency)}</td>
               <td>
-                {STATUS_LABEL[inv.status] ?? inv.status}
-                {inv.hosted_invoice_url ? (
-                  <>
-                    {" "}
-                    <a href={inv.hosted_invoice_url} target="_blank" rel="noreferrer">↗</a>
-                  </>
-                ) : null}
+                {/* The Stripe page was a bare "↗" — 10×18px, and a screen reader
+                    announced it as "Pfeil". */}
+                <span className="tds-toolbar">
+                  {STATUS_LABEL[inv.status] ?? inv.status}
+                  {inv.hosted_invoice_url ? (
+                    <a
+                      className="btn btn-ghost"
+                      href={inv.hosted_invoice_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Rechnung #${inv.id} bei Stripe öffnen (neuer Tab)`}
+                    >
+                      Stripe ↗
+                    </a>
+                  ) : null}
+                </span>
               </td>
               <td>
                 {inv.status === "draft" ? (

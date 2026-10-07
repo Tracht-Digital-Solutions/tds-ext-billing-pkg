@@ -52,6 +52,8 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
         return [
             new PermissionDef('billing:read', 'Rechnungen ansehen', 'billing'),
             new PermissionDef('billing:write', 'Rechnungen erstellen & senden', 'billing'),
+            // The portal key — see requirePortalRead() and the TS manifest.
+            new PermissionDef('invoices:read', 'Eigene Rechnungen ansehen (Portal)', 'billing'),
         ];
     }
 
@@ -245,7 +247,7 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
         // --- Portal (customer's own invoices) ---------------------------------
         $app->get('/billing/invoices', function (Request $req, Response $res) use ($c): Response {
             $user = $c->get(UserContext::class);
-            if (($deny = self::require($user, 'billing:read', $res)) !== null) {
+            if (($deny = self::requirePortalRead($user, $res)) !== null) {
                 return $deny;
             }
             $cid = $user->activeCompanyId();
@@ -255,7 +257,7 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
 
         $app->get('/billing/invoices/{id:[0-9]+}', function (Request $req, Response $res, array $args) use ($c): Response {
             $user = $c->get(UserContext::class);
-            if (($deny = self::require($user, 'billing:read', $res)) !== null) {
+            if (($deny = self::requirePortalRead($user, $res)) !== null) {
                 return $deny;
             }
             $invoice = $c->get(InvoiceRepository::class)->find((int) $args['id']);
@@ -400,5 +402,27 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
     public function apiDocs(): array
     {
         return require __DIR__ . '/../docs/api.php';
+    }
+
+    /**
+     * The portal's own invoices: `billing:read` OR the portal key `invoices:read`.
+     *
+     * Every other portal module took over the portal's permission names
+     * (`projects:read`, `documents:read`, `tickets:read`, …); billing alone
+     * introduced `billing:read`. The auth API's system groups — Vollzugriff,
+     * Buchhaltung, Nur Lesen — and tds-shared's PORTAL_PERMISSIONS grant
+     * `invoices:read`, so a customer in exactly the group meant for invoices
+     * was refused their own. Both keys open only the ACTIVE company's sent
+     * invoices; the admin routes stay on `billing:read`/`billing:write`.
+     */
+    private static function requirePortalRead(UserContext $user, Response $res): ?Response
+    {
+        if (!$user->isAuthenticated()) {
+            return self::json($res, ['error' => 'Unauthorized'], 401);
+        }
+        if (!$user->has('billing:read') && !$user->has('invoices:read')) {
+            return self::json($res, ['error' => 'Forbidden'], 403);
+        }
+        return null;
     }
 }

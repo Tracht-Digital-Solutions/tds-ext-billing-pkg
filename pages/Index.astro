@@ -1,13 +1,27 @@
 ---
-// Billing/invoices page — the admin invoice list + create + send UI. Injected
-// into the host build via the manifest's route slot.
+// Billing/invoices page, injected into the host build via the manifest's route
+// slot. One route, two products: the admin panel drafts, sends and tracks
+// invoices; the customer portal lists the active company's own invoices with
+// the Stripe page to pay them. The portal used to get the admin island too,
+// whose first call (`/admin/invoices`) answered 403 for every customer.
 import BillingAdmin from "../islands/BillingAdmin.tsx";
----
+import BillingPortal from "../islands/BillingPortal.tsx";
 
+const portal = (import.meta.env.PUBLIC_FRONTEND_TARGET as string | undefined) === "customer";
+---
 <section class="tds-page">
   <div class="tds-page__head">
     <h1 class="tds-page__title">Rechnungen</h1>
   </div>
-  <p class="tds-page__lede">Rechnungen erstellen, an Stripe senden und den Zahlungsstatus verfolgen.</p>
-  <BillingAdmin client:load />
+  {portal ? (
+    <>
+      <p class="tds-page__lede">Ihre Rechnungen im Überblick — offene bezahlen Sie direkt online.</p>
+      <BillingPortal client:load />
+    </>
+  ) : (
+    <>
+      <p class="tds-page__lede">Rechnungen erstellen, an Stripe senden und den Zahlungsstatus verfolgen.</p>
+      <BillingAdmin client:load />
+    </>
+  )}
 </section>

@@ -12,6 +12,11 @@ export default defineExtension({
   permissions: [
     { id: "billing:read", label: "Rechnungen ansehen", group: "billing" },
     { id: "billing:write", label: "Rechnungen erstellen & senden", group: "billing" },
+    // The portal's own key (tds-shared PORTAL_PERMISSIONS), granted by the auth
+    // API's system groups Vollzugriff / Buchhaltung / Nur Lesen. Declared here so
+    // it is grantable in the matrix and gates the portal's view of the
+    // company's OWN invoices. The admin routes still need a platform admin.
+    { id: "invoices:read", label: "Eigene Rechnungen ansehen (Portal)", group: "billing" },
   ],
   nav: [
     {
@@ -21,7 +26,10 @@ export default defineExtension({
       icon: "file-text",
       group: "abrechnung",
       order: 10,
-      permission: "billing:read",
+      // The portal key: the admin side is platform-admin only anyway (admins
+      // bypass), and `billing:read` hid the page from exactly the customers it
+      // exists for.
+      permission: "invoices:read",
     },
   ],
   widgets: [
@@ -47,7 +55,7 @@ export default defineExtension({
     {
       pattern: "/rechnungen",
       entrypoint: "@tracht-digital-solutions/tds-ext-billing/pages/Index.astro",
-      permission: "billing:read",
+      permission: "invoices:read",
     },
   ],
   i18n: {

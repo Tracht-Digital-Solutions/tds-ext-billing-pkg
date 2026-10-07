@@ -24,7 +24,7 @@ return [
         'responses' => [
             ['status' => 200, 'description' => '`{configured: bool, open: <Anzahl>}`'],
             ['status' => 401, 'description' => 'Keine Sitzung.'],
-            ['status' => 403, 'description' => 'Kein `billing:read`.'],
+            ['status' => 403, 'description' => 'Weder `billing:read` noch `invoices:read`.'],
         ],
     ],
     [
@@ -127,12 +127,13 @@ return [
         'pattern' => '/billing/invoices',
         'tag' => 'Portal',
         'summary' => 'Rechnungen der aktiven Firma',
-        'description' => 'Ohne aktive Firma eine leere Liste, kein Fehler.',
+        'description' => 'Ohne aktive Firma eine leere Liste, kein Fehler. Öffnet auch mit dem '
+            . 'Portal-Recht `invoices:read`, das die Systemgruppen vergeben.',
         'permission' => 'billing:read',
         'responses' => [
             ['status' => 200, 'description' => '`{invoices: [...]}` inklusive `hosted_invoice_url` als Bezahl-Link.'],
             ['status' => 401, 'description' => 'Keine Sitzung.'],
-            ['status' => 403, 'description' => 'Kein `billing:read`.'],
+            ['status' => 403, 'description' => 'Weder `billing:read` noch `invoices:read`.'],
         ],
     ],
     [
@@ -150,7 +151,7 @@ return [
         'responses' => [
             ['status' => 200, 'description' => 'Die Rechnung mit `items`.'],
             ['status' => 401, 'description' => 'Keine Sitzung.'],
-            ['status' => 403, 'description' => 'Kein `billing:read`.'],
+            ['status' => 403, 'description' => 'Weder `billing:read` noch `invoices:read`.'],
             ['status' => 404, 'description' => 'Unbekannt oder nicht in der aktiven Firma.'],
         ],
     ],
