@@ -3,7 +3,8 @@ import { Skeleton } from "@tracht-digital-solutions/tds-shared/components";
 import { apiFetch } from "@tracht-digital-solutions/tds-shared/api";
 
 interface Summary {
-  configured: boolean;
+  /** Admins only — whether invoices can be sent at all. */
+  configured?: boolean;
   open: number;
 }
 
@@ -25,7 +26,12 @@ export default function WidgetBody() {
   return (
     <div className="tds-stack">
       <p className="tds-widget__metric">{data.open}</p>
-      <p className="marginalia">{data.configured ? "offene Rechnungen" : "Stripe nicht konfiguriert"}</p>
+      <p className="marginalia">
+        {data.configured === false ? "Stripe nicht konfiguriert" : data.open === 1 ? "offene Rechnung" : "offene Rechnungen"}
+      </p>
+      <a className="link-underline text-sm inline-flex items-center min-h-11 self-start" href="/rechnungen">
+        {data.open > 0 ? "Jetzt ansehen und bezahlen" : "Alle Rechnungen"}
+      </a>
     </div>
   );
 }

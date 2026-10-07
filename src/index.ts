@@ -38,7 +38,9 @@ export default defineExtension({
       title: "Offene Rechnungen",
       island: "@tracht-digital-solutions/tds-ext-billing/widgets/Widget.astro",
       size: "sm",
-      permission: "billing:read",
+      // The portal key, like the page: the summary counts the active company's
+      // own open invoices for a customer and every open one for an admin.
+      permission: "invoices:read",
       dataEndpoint: "/billing/summary",
       order: 10,
     },

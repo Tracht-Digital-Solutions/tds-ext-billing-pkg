@@ -112,6 +112,15 @@ final class BillingModuleTest extends TestCase
         self::assertSame(401, $this->get($this->appWith(new FakeUser(auth: false)), '/billing/summary')->getStatusCode());
     }
 
+    public function testSummaryServesThePortalWithoutOperatorDetail(): void
+    {
+        // A customer holding the portal key gets their count — and nothing
+        // about whether Stripe is configured, which is not theirs to act on.
+        $res = $this->get($this->appWith(new FakeUser(perms: ['invoices:read'], company: null)), '/billing/summary');
+        self::assertSame(200, $res->getStatusCode());
+        self::assertSame(['open' => 0], json_decode((string) $res->getBody(), true));
+    }
+
     public function testAdminListRequiresAdmin(): void
     {
         self::assertSame(403, $this->get($this->appWith(new FakeUser(perms: ['billing:read'])), '/admin/invoices')->getStatusCode());

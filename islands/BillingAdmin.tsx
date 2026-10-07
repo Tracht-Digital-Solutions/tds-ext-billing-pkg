@@ -15,6 +15,10 @@ interface Invoice {
   hosted_invoice_url: string | null;
   created_at: string;
 }
+interface Company {
+  id: number;
+  name: string;
+}
 interface ItemForm {
   description: string;
   quantity: string;
@@ -25,6 +29,9 @@ const euros = (cents: number, currency: string) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency }).format(cents / 100);
 
 const STATUS_LABEL: Record<string, string> = { draft: "Entwurf", open: "Offen", paid: "Bezahlt", void: "Storniert" };
+
+/** `2026-10-07…` → `07.10.2026`, without a time-zone round trip. */
+const day = (iso: string) => iso.slice(0, 10).split("-").reverse().join(".");
 
 export default function BillingAdmin() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -37,6 +44,14 @@ export default function BillingAdmin() {
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState<ItemForm[]>([{ description: "", quantity: "1", amount: "" }]);
+  /**
+   * The customer directory (tds-ext-customers), for names instead of ids. The
+   * list used to print "12" in the Kunde column and the form asked for a
+   * "Kunden-ID" nobody knows by heart. `null` = the directory is not composed
+   * or not reachable — the form then falls back to the number field, because
+   * this extension deliberately has no hard dependency on customers.
+   */
+  const [companies, setCompanies] = useState<Company[] | null>(null);
 
   const load = async () => {
     // apiFetch hands back every HTTP status, but a request that never reaches
@@ -56,7 +71,16 @@ export default function BillingAdmin() {
   };
   useEffect(() => {
     void load();
+    void (async () => {
+      const res = await api("/admin/customers").catch(() => null);
+      if (!res?.ok) return;
+      const data = (await res.json().catch(() => null)) as { customers?: Company[] } | null;
+      if (Array.isArray(data?.customers)) setCompanies(data.customers);
+    })();
   }, []);
+
+  const companyName = (id: number | null) =>
+    id === null ? "—" : (companies?.find((c) => c.id === id)?.name ?? `Firma #${id}`);
 
   const setItem = (i: number, patch: Partial<ItemForm>) =>
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -157,7 +181,19 @@ export default function BillingAdmin() {
       {showForm ? (
         <div className="tds-card tds-stack">
           <h4>Neue Rechnung</h4>
-          <input className="field-boxed" type="number" placeholder="Kunden-ID (optional)" aria-label="Kunden-ID" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
+          {companies ? (
+            <label className="tds-field-row">
+              <span>Kunde</span>
+              <select className="field-boxed" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+                <option value="">— ohne Kunde —</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={String(c.id)}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <input className="field-boxed" type="number" placeholder="Kunden-ID (optional)" aria-label="Kunden-ID" value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
+          )}
           <input className="field-boxed" type="text" placeholder="Beschreibung (optional)" aria-label="Beschreibung" value={description} onChange={(e) => setDescription(e.target.value)} />
           <label className="tds-field-row">
             <span>Fällig am</span>
@@ -187,7 +223,7 @@ export default function BillingAdmin() {
           </div>
         </div>
       ) : (
-        <button type="button" className="btn btn-primary" onClick={() => setShowForm(true)}>Neue Rechnung</button>
+        <button type="button" className="btn btn-primary self-start" onClick={() => setShowForm(true)}>Neue Rechnung</button>
       )}
 
       <table className="tds-table">
@@ -203,9 +239,9 @@ export default function BillingAdmin() {
         <tbody>
           {invoices.map((inv) => (
             <tr key={inv.id}>
-              <td>{inv.created_at.slice(0, 10)}</td>
-              <td>{inv.customer_id ?? "—"}</td>
-              <td>{euros(inv.total_cents, inv.currency)}</td>
+              <td className="tabular-nums">{day(inv.created_at)}</td>
+              <td>{companyName(inv.customer_id)}</td>
+              <td className="tabular-nums">{euros(inv.total_cents, inv.currency)}</td>
               <td>
                 {/* The Stripe page was a bare "↗" — 10×18px, and a screen reader
                     announced it as "Pfeil". */}

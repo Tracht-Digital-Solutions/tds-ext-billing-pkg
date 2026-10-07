@@ -71,7 +71,7 @@ describe("permissions", () => {
       expect(route.permission, `route ${route.pattern} is ungated`).toMatch(/^(billing|invoices):read$/);
     }
     for (const widget of manifest.widgets ?? []) {
-      expect(widget.permission, `widget ${widget.id} is ungated`).toBe("billing:read");
+      expect(widget.permission, `widget ${widget.id} is ungated`).toMatch(/^(billing|invoices):read$/);
     }
   });
 

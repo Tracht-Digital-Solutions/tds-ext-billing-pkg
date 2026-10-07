@@ -153,9 +153,20 @@ describe("loading", () => {
   it("lists an invoice with its date, customer and amount", async () => {
     await open([DRAFT]);
     const r = row("Entwurf");
-    expect(r.textContent).toContain("2026-07-20");
-    expect(r.textContent).toContain("12");
+    expect(r.textContent).toContain("20.07.2026");
+    // No customer directory composed: the id, labelled as one.
+    expect(r.textContent).toContain("Firma #12");
     expect(within(r).getByText(money(119000))).toBeTruthy();
+  });
+
+  it("names the customer from the directory, and offers it as a choice", async () => {
+    respond(/^\/admin\/customers$/, { customers: [{ id: 12, name: "Hof Meerheck" }] }, 200, "GET");
+    const u = await open([DRAFT]);
+    await waitFor(() => expect(row("Entwurf").textContent).toContain("Hof Meerheck"));
+    await u.click(screen.getByRole("button", { name: "Neue Rechnung" }));
+    const select = screen.getByLabelText("Kunde") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toContain("Hof Meerheck");
+    expect(screen.queryByLabelText("Kunden-ID")).toBeNull();
   });
 
   it("shows a dash for an invoice with no customer", async () => {

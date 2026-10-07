@@ -120,7 +120,7 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
         // Widget summary.
         $app->get('/billing/summary', function (Request $req, Response $res) use ($c): Response {
             $user = $c->get(UserContext::class);
-            if (($deny = self::require($user, 'billing:read', $res)) !== null) {
+            if (($deny = self::requirePortalRead($user, $res)) !== null) {
                 return $deny;
             }
             // A portal user sees their company's count. It was the GLOBAL
@@ -131,10 +131,12 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
                 $cid = $user->activeCompanyId();
                 $open = $cid === null ? 0 : $c->get(InvoiceRepository::class)->openCount((int) $cid);
             }
-            return self::json($res, [
-                'configured' => $c->get(StripeClient::class)->isConfigured(),
-                'open' => $open,
-            ]);
+            // Whether Stripe is configured is the operator's concern; a customer
+            // tile that said "Stripe nicht konfiguriert" told them nothing they
+            // could act on.
+            return self::json($res, $user->isAdmin()
+                ? ['configured' => $c->get(StripeClient::class)->isConfigured(), 'open' => $open]
+                : ['open' => $open]);
         });
 
         // --- Admin ------------------------------------------------------------
