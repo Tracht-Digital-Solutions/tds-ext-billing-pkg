@@ -111,39 +111,43 @@ export default function BillingPortal() {
 
       {/* Phone: one card per invoice. Six columns do not fit 390px, and the one
           that fell off the edge was the status — the thing a customer looks
-          for. */}
-      <ul className="tds-stack sm:hidden" aria-label="Rechnungen">
-        {invoices.map((inv) => {
-          const s = STATUS[inv.status] ?? { label: inv.status, tone: "muted" };
-          const late = overdue(inv);
-          return (
-            <li key={inv.id} className="tds-card tds-stack p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold tabular-nums">#{inv.id}</p>
-                  {inv.description ? <p className="text-sm opacity-70">{inv.description}</p> : null}
+          for. The breakpoint sits on a wrapper: `.tds-stack` is unlayered CSS and
+          its `display: flex` beat Tailwind's `sm:hidden`, so a desktop showed
+          every invoice twice, as cards and in the table. */}
+      <div className="sm:hidden">
+        <ul className="tds-stack" aria-label="Rechnungen">
+          {invoices.map((inv) => {
+            const s = STATUS[inv.status] ?? { label: inv.status, tone: "muted" };
+            const late = overdue(inv);
+            return (
+              <li key={inv.id} className="tds-card tds-stack p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold tabular-nums">#{inv.id}</p>
+                    {inv.description ? <p className="text-sm opacity-70">{inv.description}</p> : null}
+                  </div>
+                  <span className={`status-pill status-pill--${late ? "danger" : s.tone}`}>{late ? "Überfällig" : s.label}</span>
                 </div>
-                <span className={`status-pill status-pill--${late ? "danger" : s.tone}`}>{late ? "Überfällig" : s.label}</span>
-              </div>
-              <p className="flex items-baseline justify-between gap-3">
-                <span className="text-sm opacity-70">{dueLabel(inv)}</span>
-                <strong className="tabular-nums">{euros(inv.total_cents, inv.currency)}</strong>
-              </p>
-              {inv.hosted_invoice_url ? (
-                <a
-                  className={`${inv.status === "open" ? "btn btn-primary" : "btn btn-ghost"} w-full justify-center`}
-                  href={inv.hosted_invoice_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`${inv.status === "open" ? "Rechnung bezahlen" : "Rechnung ansehen"}: #${inv.id} (neuer Tab)`}
-                >
-                  {inv.status === "open" ? "Bezahlen" : "Ansehen"}
-                </a>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+                <p className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm opacity-70">{dueLabel(inv)}</span>
+                  <strong className="tabular-nums">{euros(inv.total_cents, inv.currency)}</strong>
+                </p>
+                {inv.hosted_invoice_url ? (
+                  <a
+                    className={`${inv.status === "open" ? "btn btn-primary" : "btn btn-ghost"} w-full justify-center`}
+                    href={inv.hosted_invoice_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${inv.status === "open" ? "Rechnung bezahlen" : "Rechnung ansehen"}: #${inv.id} (neuer Tab)`}
+                  >
+                    {inv.status === "open" ? "Bezahlen" : "Ansehen"}
+                  </a>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       <div className="hidden sm:block overflow-x-auto">
         <table className="tds-table">
