@@ -13,6 +13,8 @@ use Tds\Ext\Billing\Service\StripeClient;
 use Tds\Frontend\Contract\Stripe\StripeException;
 use Tds\Frontend\Contract\Stripe\StripeWebhook;
 use Tds\Frontend\Contract\AbstractModule;
+use Tds\Frontend\Contract\Commerce\SaleEvent;
+use Tds\Frontend\Contract\Commerce\SaleEvents;
 use Tds\Frontend\Contract\SetupStatusSource;
 use Tds\Frontend\Contract\ApiDocSource;
 use Tds\Frontend\Contract\PermissionDef;
@@ -326,7 +328,11 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
             if (in_array($type, ['invoice.paid', 'invoice.payment_succeeded'], true)) {
                 $stripeId = (string) ($event['data']['object']['id'] ?? '');
                 if ($stripeId !== '') {
-                    $c->get(InvoiceRepository::class)->markPaidByStripeId($stripeId);
+                    $repo = $c->get(InvoiceRepository::class);
+                    $id = $repo->markPaidByStripeId($stripeId);
+                    if ($id !== null) {
+                        self::reportPaid($c, $id, $repo);
+                    }
                 }
             }
             return self::json($res, ['received' => true]);
@@ -409,6 +415,25 @@ final class BillingModule extends AbstractModule implements ApiDocSource, Stripe
             return $v;
         }
         return self::env($envKey, $default);
+    }
+
+    /**
+     * Tell other modules (the referral programme) that an invoice is paid —
+     * on every delivery: listeners are idempotent by (source, id), and a
+     * failure here must never turn the webhook into a retry loop.
+     */
+    private static function reportPaid(ContainerInterface $c, int $id, InvoiceRepository $repo): void
+    {
+        try {
+            $events = $c->has(SaleEvents::class) ? $c->get(SaleEvents::class) : null;
+            if (!$events instanceof SaleEvents) {
+                return;
+            }
+            $invoice = $repo->find($id);
+            $events->paid(new SaleEvent('billing', (string) $id, (int) ($invoice['total_cents'] ?? 0)));
+        } catch (\Throwable $e) {
+            error_log('[tds-billing] sale event failed: ' . $e->getMessage());
+        }
     }
 
     private static function store(ContainerInterface $c): ?SettingsStore

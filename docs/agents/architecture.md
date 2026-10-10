@@ -91,3 +91,10 @@ middle. The invoice table stays static.
 `new BillingModule()` is registered in `tds-core-frontend-api`'s `Modules::enabled()`. The
 manifest is listed in the admin product's `frontendHost({ extensions })`, and in the
 customer product's for the portal view.
+
+## Sale events
+
+After the webhook marks an invoice paid, it calls `Commerce\SaleEvents::paid()` (contract ≥ 1.15)
+with `source = billing`, the invoice id and `total_cents`. It runs on every delivery and is
+guarded, so it can never fail the webhook. The referral programme uses it to mature a
+commission recorded against that invoice.

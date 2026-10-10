@@ -9,6 +9,9 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Tds\Ext\Billing\BillingModule;
+use Tds\Frontend\Contract\Commerce\SaleEvent;
+use Tds\Frontend\Contract\Commerce\SaleEvents;
+use Tds\Frontend\Contract\Commerce\SaleListener;
 use Tds\Frontend\Contract\UserContext;
 
 /** A configurable UserContext double. */
@@ -174,5 +177,63 @@ final class BillingModuleTest extends TestCase
         );
         self::assertSame(400, $res->getStatusCode());
         putenv('STRIPE_WEBHOOK_SECRET');
+    }
+
+    public function testAPaidInvoiceIsReportedAsASaleOnEveryDelivery(): void
+    {
+        // SQLite stands in for the one table the webhook touches; NOW() is
+        // MySQL's, so it is registered here. Only the columns the repository
+        // reads — this checks the hand-over, not the schema.
+        $pdo = new \PDO('sqlite::memory:');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+        $pdo->sqliteCreateFunction('NOW', static fn (): string => '2026-10-11 12:00:00', 0);
+        $pdo->exec('CREATE TABLE billing_invoice (id INTEGER PRIMARY KEY, customer_id INTEGER, currency TEXT,
+            status TEXT, description TEXT, total_cents INTEGER, due_date TEXT, stripe_invoice_id TEXT,
+            hosted_invoice_url TEXT, paid_at TEXT, created_at TEXT)');
+        $pdo->exec('CREATE TABLE billing_invoice_item (invoice_id INTEGER, description TEXT, quantity INTEGER,
+            unit_amount_cents INTEGER, sort_order INTEGER)');
+        $pdo->exec("INSERT INTO billing_invoice VALUES (55, NULL, 'EUR', 'open', 'Website', 120000, NULL,
+            'in_123', NULL, NULL, '2026-10-01 10:00:00')");
+
+        $seen = new \ArrayObject();
+        $listener = new class ($seen) implements SaleListener {
+            public function __construct(private readonly \ArrayObject $seen)
+            {
+            }
+
+            public function onSalePaid(SaleEvent $sale): void
+            {
+                $this->seen[] = "{$sale->source}:{$sale->sourceId}:{$sale->netCents}";
+            }
+
+            public function onSaleReversed(string $source, string $sourceId): void
+            {
+            }
+        };
+
+        $container = new Container();
+        $container->set(UserContext::class, new FakeUser(auth: false));
+        $container->set(\PDO::class, $pdo);
+        $container->set(SaleEvents::class, new SaleEvents([$listener]));
+        AppFactory::setContainer($container);
+        $app = AppFactory::create();
+        $app->addRoutingMiddleware();
+        (new BillingModule())->register($app);
+
+        putenv('STRIPE_WEBHOOK_SECRET=whsec_x');
+        $payload = '{"type":"invoice.paid","data":{"object":{"id":"in_123"}}}';
+        $t = time();
+        $sig = 't=' . $t . ',v1=' . hash_hmac('sha256', $t . '.' . $payload, 'whsec_x');
+        foreach ([1, 2] as $_) {
+            $req = (new ServerRequestFactory())->createServerRequest('POST', '/billing/webhook')
+                ->withHeader('Stripe-Signature', $sig);
+            $req->getBody()->write($payload);
+            self::assertSame(200, $app->handle($req)->getStatusCode());
+        }
+        putenv('STRIPE_WEBHOOK_SECRET');
+
+        self::assertSame(['billing:55:120000', 'billing:55:120000'], $seen->getArrayCopy());
+        self::assertSame('paid', $pdo->query('SELECT status FROM billing_invoice WHERE id = 55')->fetchColumn());
     }
 }
