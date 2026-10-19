@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Spinner } from "@tracht-digital-solutions/tds-shared/components";
+import { Alert, Spinner } from "@tracht-digital-solutions/tds-shared/components";
 import { apiFetch } from "@tracht-digital-solutions/tds-shared/api";
+import { formatCents, formatIsoDay } from "@tracht-digital-solutions/tds-shared/format";
 
 /**
  * The portal's invoice view: the active company's own invoices, newest first,
@@ -25,11 +26,8 @@ interface Invoice {
   created_at: string;
 }
 
-const euros = (cents: number, currency: string) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency }).format(cents / 100);
-
-/** `2026-10-07…` → `07.10.2026`, without a time-zone round trip. */
-const day = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join(".") : "—");
+const euros = (cents: number, currency: string) => formatCents(cents, { currency });
+const day = (iso: string | null) => formatIsoDay(iso);
 
 const STATUS: Record<string, { label: string; tone: string }> = {
   open: { label: "Offen", tone: "warning" },
@@ -78,7 +76,7 @@ export default function BillingPortal() {
     };
   }, []);
 
-  if (error) return <p className="tds-alert tds-alert--danger" role="alert">{error}</p>;
+  if (error) return <Alert>{error}</Alert>;
   if (invoices === null) {
     return (
       <p className="tds-empty" aria-busy="true">
@@ -99,14 +97,14 @@ export default function BillingPortal() {
       {open.length > 0 ? (
         // One text run: `.tds-alert` is a flex row, and loose text nodes beside
         // a <strong> became separate flex items with a gap before the period.
-        <p className="tds-alert tds-alert--warning" role="status">
+        <Alert tone="warning">
           <span>
             {open.length === 1 ? "1 offene Rechnung" : `${open.length} offene Rechnungen`} über{" "}
             <strong>{euros(openTotal, open[0]!.currency)}</strong>.
           </span>
-        </p>
+        </Alert>
       ) : (
-        <p className="tds-alert tds-alert--success" role="status">Alle Rechnungen sind bezahlt.</p>
+        <Alert tone="success">Alle Rechnungen sind bezahlt.</Alert>
       )}
 
       {/* Phone: one card per invoice. Six columns do not fit 390px, and the one

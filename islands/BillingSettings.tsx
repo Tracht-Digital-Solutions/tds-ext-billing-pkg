@@ -1,105 +1,47 @@
 import { useEffect, useState } from "react";
-import { Spinner, toast } from "@tracht-digital-solutions/tds-shared/components";
-import { apiFetch } from "@tracht-digital-solutions/tds-shared/api";
-
-interface Masked {
-  key: string;
-  secret: boolean;
-  configured?: boolean;
-  last4?: string | null;
-  value?: string;
-}
-
-const api = apiFetch;
-const NS = "/admin/settings/billing";
+import { Alert, Spinner } from "@tracht-digital-solutions/tds-shared/components";
+import { SecretField, useRuntimeSettings } from "@tracht-digital-solutions/tds-shared/admin";
 
 /**
  * Stripe settings — secret key + webhook secret + default currency + payment
- * term, in the core runtime settings store (admin-only). Secrets come back masked
- * (configured + last4); a blank secret on save keeps the existing value.
+ * term, in the core runtime settings store (`/admin/settings/billing`,
+ * admin-only), loaded and saved by tds-shared `useRuntimeSettings`. Secrets
+ * come back masked (configured + last4); a blank secret on save keeps the
+ * existing value.
  */
 export default function BillingSettings() {
-  const [loaded, setLoaded] = useState(false);
-  const [keyState, setKeyState] = useState<Masked | null>(null);
-  const [whState, setWhState] = useState<Masked | null>(null);
+  const settings = useRuntimeSettings("billing");
   const [keyInput, setKeyInput] = useState("");
   const [whInput, setWhInput] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [days, setDays] = useState("14");
-  const [status, setStatus] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const load = async () => {
-    // apiFetch hands back every HTTP status, but a request that never reaches
-    // the API rejects. Uncaught, this section stayed on its spinner for good.
-    const res = await api(NS).catch(() => null);
-    if (res === null) {
-      setStatus("Einstellungen konnten nicht geladen werden — die API ist nicht erreichbar.");
-      setLoaded(true);
-      return;
-    }
-    if (!res.ok) {
-      setStatus(res.status === 403 || res.status === 401 ? "Nur für Administratoren." : `Fehler (HTTP ${res.status}).`);
-      setLoaded(true);
-      return;
-    }
-    const d = await res.json();
-    const map = new Map<string, Masked>((d.settings ?? []).map((s: Masked) => [s.key, s]));
-    setKeyState(map.get("stripe_secret_key") ?? null);
-    setWhState(map.get("stripe_webhook_secret") ?? null);
-    setCurrency(map.get("default_currency")?.value || "EUR");
-    setDays(map.get("days_until_due")?.value || "14");
-    setLoaded(true);
-  };
 
   useEffect(() => {
-    void load();
-  }, []);
+    setCurrency(settings.value("default_currency", "EUR"));
+    setDays(settings.value("days_until_due", "14"));
+  }, [settings.settings]);
 
   const save = async () => {
-    setBusy(true);
-    setStatus(null);
-    const settings: Masked[] = [
+    const saved = await settings.save([
       { key: "stripe_secret_key", secret: true, value: keyInput.trim() },
       { key: "stripe_webhook_secret", secret: true, value: whInput.trim() },
-      { key: "default_currency", secret: false, value: currency.trim().toUpperCase() },
-      { key: "days_until_due", secret: false, value: days.trim() },
-    ];
-    const res = await api(NS, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ settings }),
-    }).catch(() => null);
-    setBusy(false);
-    if (res === null) {
-      toast.danger("Speichern fehlgeschlagen — die API ist nicht erreichbar.");
-      return;
-    }
-    if (res.ok) {
+      { key: "default_currency", value: currency.trim().toUpperCase() },
+      { key: "days_until_due", value: days.trim() },
+    ]);
+    // The typed secrets stay in their fields after a failure, for another attempt.
+    if (saved) {
       setKeyInput("");
       setWhInput("");
-      toast.success("Gespeichert.");
-      void load();
-    } else {
-      toast.danger(`Speichern fehlgeschlagen (HTTP ${res.status}).`);
     }
   };
 
-  const hint = (s: Masked | null) => (s?.configured ? `konfiguriert (…${s.last4 ?? "????"})` : "nicht konfiguriert");
-
-  if (!loaded) return <p><Spinner /></p>;
+  if (!settings.loaded) return <p><Spinner /></p>;
 
   return (
     <div className="billing-settings space-y-4">
       <p className="text-sm opacity-70">Nur nötig, wenn dieses Modul ein eigenes Stripe-Konto nutzen soll. Ohne eigenen Schlüssel gilt das zentrale Konto unter Einstellungen → Zahlungen (Stripe); dort stehen auch alle Webhook-Adressen.</p>
-      <label className="block">
-        <span className="text-sm">Stripe Secret Key, optional <em className="opacity-60">({hint(keyState)})</em></span>
-        <input className="field-boxed" type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} placeholder="sk_… (leer = behalten)" autoComplete="off" />
-      </label>
-      <label className="block">
-        <span className="text-sm">Webhook Secret <em className="opacity-60">({hint(whState)})</em></span>
-        <input className="field-boxed" type="password" value={whInput} onChange={(e) => setWhInput(e.target.value)} placeholder="whsec_… (leer = behalten)" autoComplete="off" />
-      </label>
+      <SecretField label="Stripe Secret Key, optional" setting={settings.get("stripe_secret_key")} value={keyInput} onChange={setKeyInput} placeholder="sk_… (leer = behalten)" />
+      <SecretField label="Webhook Secret" setting={settings.get("stripe_webhook_secret")} value={whInput} onChange={setWhInput} placeholder="whsec_… (leer = behalten)" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm">Standard-Währung</span>
@@ -110,10 +52,9 @@ export default function BillingSettings() {
           <input className="field-boxed" type="number" min="0" value={days} onChange={(e) => setDays(e.target.value)} placeholder="14" />
         </label>
       </div>
-      {/* Outcomes are toasts now; what is left here is the load failure and
-          form validation — i.e. a failure, which used to render in the info hue. */}
-      {status ? <p className="tds-alert tds-alert--danger" role="alert">{status}</p> : null}
-      <button type="button" className="btn btn-primary" onClick={save} disabled={busy} aria-busy={busy}>Speichern</button>
+      {/* Outcomes are toasts; what is left here is the load failure. */}
+      <Alert>{settings.error}</Alert>
+      <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={settings.busy} aria-busy={settings.busy}>Speichern</button>
     </div>
   );
 }

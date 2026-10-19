@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { ConfirmDialog, Spinner, toast } from "@tracht-digital-solutions/tds-shared/components";
-import { apiFetch } from "@tracht-digital-solutions/tds-shared/api";
+import { Alert, ConfirmDialog, Spinner, toast } from "@tracht-digital-solutions/tds-shared/components";
+import { apiFetch, sendJson } from "@tracht-digital-solutions/tds-shared/api";
 import { AnimatedItem, AnimatedList } from "@tracht-digital-solutions/tds-shared/motion/react";
-
-const api = apiFetch;
+import { formatCents, formatIsoDay, parseEuros } from "@tracht-digital-solutions/tds-shared/format";
 
 interface Invoice {
   id: number;
@@ -25,13 +24,9 @@ interface ItemForm {
   amount: string; // euros
 }
 
-const euros = (cents: number, currency: string) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency }).format(cents / 100);
 
 const STATUS_LABEL: Record<string, string> = { draft: "Entwurf", open: "Offen", paid: "Bezahlt", void: "Storniert" };
 
-/** `2026-10-07…` → `07.10.2026`, without a time-zone round trip. */
-const day = (iso: string) => iso.slice(0, 10).split("-").reverse().join(".");
 
 export default function BillingAdmin() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -56,7 +51,7 @@ export default function BillingAdmin() {
   const load = async () => {
     // apiFetch hands back every HTTP status, but a request that never reaches
     // the API rejects. Uncaught, the list stayed on its spinner for good.
-    const res = await api("/admin/invoices").catch(() => null);
+    const res = await apiFetch("/admin/invoices").catch(() => null);
     if (res === null) {
       setStatus("Rechnungen konnten nicht geladen werden — die API ist nicht erreichbar.");
       setLoaded(true);
@@ -72,7 +67,7 @@ export default function BillingAdmin() {
   useEffect(() => {
     void load();
     void (async () => {
-      const res = await api("/admin/customers").catch(() => null);
+      const res = await apiFetch("/admin/customers").catch(() => null);
       if (!res?.ok) return;
       const data = (await res.json().catch(() => null)) as { customers?: Company[] } | null;
       if (Array.isArray(data?.customers)) setCompanies(data.customers);
@@ -87,27 +82,24 @@ export default function BillingAdmin() {
 
   const create = async () => {
     const payloadItems = items
-      .filter((it) => it.description.trim() !== "" && Number(it.amount) > 0)
+      .map((it) => ({ ...it, cents: parseEuros(it.amount, { round: true }) }))
+      .filter((it) => it.description.trim() !== "" && (it.cents ?? 0) > 0)
       .map((it) => ({
         description: it.description.trim(),
         quantity: Math.max(1, Number(it.quantity) || 1),
-        unit_amount_cents: Math.round(Number(it.amount) * 100),
+        unit_amount_cents: it.cents!,
       }));
     if (payloadItems.length === 0) {
       // Validation stays in the form — it names what the user must still fix.
       setStatus("Mindestens eine Position mit Betrag angeben.");
       return;
     }
-    const res = await api("/admin/invoices", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await sendJson("/admin/invoices", "POST", {
         customer_id: customerId.trim() === "" ? null : Number(customerId),
         description,
         due_date: dueDate || null,
         items: payloadItems,
-      }),
-    }).catch(() => null);
+      }).catch(() => null);
     if (res === null) {
       // The form stays open with everything typed into it.
       toast.danger("Entwurf konnte nicht erstellt werden — die API ist nicht erreichbar.");
@@ -131,7 +123,7 @@ export default function BillingAdmin() {
     // This funnelled progress, success AND failure through one info-hued
     // banner, so "Fehler: card_declined" was rendered in the same blue as
     // "An Stripe gesendet." — a failed transfer that looked like a success.
-    const res = await api(`/admin/invoices/${id}/send`, { method: "POST" }).catch(() => null);
+    const res = await apiFetch(`/admin/invoices/${id}/send`, { method: "POST" }).catch(() => null);
     if (res === null) {
       // A dropped connection can still have delivered the request; the reload
       // below shows the invoice's real status.
@@ -152,7 +144,7 @@ export default function BillingAdmin() {
     if (!inv) return;
     setDeleting(true);
     try {
-      const res = await api(`/admin/invoices/${inv.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/admin/invoices/${inv.id}`, { method: "DELETE" });
       setPendingDelete(null);
       if (res.ok) {
         toast.success("Rechnung gelöscht.");
@@ -176,7 +168,7 @@ export default function BillingAdmin() {
     <div className="tds-stack">
       {/* Only the load failure and form validation reach this now (outcomes
           are toasts), so it is a failure banner and gets the danger hue. */}
-      {status ? <p className="tds-alert tds-alert--danger" role="alert">{status}</p> : null}
+      <Alert>{status}</Alert>
 
       {showForm ? (
         <div className="tds-card tds-stack">
@@ -239,9 +231,9 @@ export default function BillingAdmin() {
         <tbody>
           {invoices.map((inv) => (
             <tr key={inv.id}>
-              <td className="tabular-nums">{day(inv.created_at)}</td>
+              <td className="tabular-nums">{formatIsoDay(inv.created_at)}</td>
               <td>{companyName(inv.customer_id)}</td>
-              <td className="tabular-nums">{euros(inv.total_cents, inv.currency)}</td>
+              <td className="tabular-nums">{formatCents(inv.total_cents, { currency: inv.currency })}</td>
               <td>
                 {/* The Stripe page was a bare "↗" — 10×18px, and a screen reader
                     announced it as "Pfeil". */}
